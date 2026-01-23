@@ -1,0 +1,7 @@
+{
+  "name": "Galaxy Trip Scanner & Manager",
+  "description": "A professional mobile application for the Galaxy Labs TMS to manage trips, scan documents using AI (Gemini), and automate route planning.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
