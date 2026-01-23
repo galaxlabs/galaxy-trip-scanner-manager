@@ -59,6 +59,45 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
     setTimeout(() => setToast({ message: '', type: null }), 3000);
   };
 
+  /**
+   * Compresses an image before sending to the API.
+   * This is critical for mobile devices where photos can be 5MB+.
+   * Large images cause timeouts or out-of-memory errors on Gemini/Frappe.
+   */
+  const compressImage = (base64Str: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = base64Str;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 1200;
+        const MAX_HEIGHT = 1200;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        // Use JPEG with 0.7 quality for a good balance of size vs readability
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      };
+      img.onerror = () => resolve(base64Str); // Fallback to original if compression fails
+    });
+  };
+
   const handleRouteUpdate = (routeName: string) => {
     const route = routes.find(r => r.name === routeName);
     if (route) {
@@ -132,10 +171,13 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
         const reader = new FileReader();
         reader.onload = async () => {
             try {
-                const base64 = reader.result as string;
-                const extracted = await extractPassengerInfo(base64);
+                const rawBase64 = reader.result as string;
+                // Compress before sending
+                const compressedBase64 = await compressImage(rawBase64);
                 
-                if (extracted.length > 0) {
+                const extracted = await extractPassengerInfo(compressedBase64);
+                
+                if (extracted && extracted.length > 0) {
                     const newPassengers: Passenger[] = extracted.map(p => ({
                         passenger_name: p.name,
                         document_number: p.passport,
@@ -147,18 +189,19 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                     }));
                     setIsDirty(true);
                 } else {
-                    const info = await extractTripInfo(base64);
-                    if (Object.keys(info).length > 0) {
+                    const info = await extractTripInfo(compressedBase64);
+                    if (info && Object.keys(info).length > 0) {
                         setFormData(prev => ({ ...prev, ...info }));
                         setIsDirty(true);
                     }
                 }
                 resolve();
             } catch (err) {
+                console.error("Processing error", err);
                 reject(err);
             }
         };
-        reader.onerror = reject;
+        reader.onerror = () => reject(new Error("File read failed"));
         reader.readAsDataURL(file);
     });
   };
@@ -168,12 +211,26 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
     if (!files || files.length === 0) return;
     const fileList = Array.from(files) as File[];
     setQueue({ total: fileList.length, processed: 0, scanning: true });
+    
+    let failures = 0;
     for (let i = 0; i < fileList.length; i++) {
-        try { await processFile(fileList[i]); } catch (err) { console.error(`Scan error ${i + 1}`); }
+        try { 
+          await processFile(fileList[i]); 
+        } catch (err) { 
+          console.error(`Scan error ${i + 1}`, err);
+          failures++;
+        }
         setQueue(q => ({ ...q, processed: i + 1 }));
     }
+    
     setQueue(q => ({ ...q, scanning: false }));
     if (fileInputRef.current) fileInputRef.current.value = '';
+    
+    if (failures > 0) {
+        showToast(`Failed to process ${failures} file(s)`, "error");
+    } else {
+        showToast(t.syncSuccess, "success");
+    }
   };
 
   const saveTrip = async () => {
@@ -270,7 +327,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
         )}
 
         {/* AI Scanner Card */}
-        <div className="bg-white p-7 rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-slate-100 relative overflow-hidden group">
+        <div className="bg-white p-7 rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-slate-100 relative overflow-hidden group text-left rtl:text-right">
             <div className="flex items-center justify-between mb-8">
                 <div>
                     <h3 className="text-sm font-black text-slate-900 uppercase tracking-tighter">{t.aiScanner}</h3>
@@ -294,11 +351,20 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                 )}
                 {queue.scanning && <div className="absolute bottom-0 left-0 h-1 bg-blue-400 transition-all duration-300" style={{ width: `${(queue.processed / queue.total) * 100}%` }}></div>}
             </button>
-            <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileUpload} />
+            <input 
+              ref={fileInputRef} 
+              type="file" 
+              accept="image/*" 
+              multiple 
+              className="hidden" 
+              onChange={handleFileUpload}
+              // Helps mobile devices prioritize the camera
+              capture="environment"
+            />
         </div>
 
         <div className="space-y-4">
-            <section className="bg-white p-7 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
+            <section className="bg-white p-7 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6 text-left rtl:text-right">
                 <div className="flex items-center gap-2">
                     <div className="w-1.5 h-4 bg-blue-600 rounded-full"></div>
                     <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">{t.operationalSetup}</h4>
@@ -321,7 +387,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                 </div>
             </section>
 
-            <section className="bg-white p-7 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
+            <section className="bg-white p-7 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6 text-left rtl:text-right">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <div className="w-1.5 h-4 bg-emerald-500 rounded-full"></div>

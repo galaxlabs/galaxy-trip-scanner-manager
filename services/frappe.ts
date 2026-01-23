@@ -68,6 +68,39 @@ export class FrappeClient {
     }
   }
 
+  static async login(usr: string, pwd: string) {
+    // 1. Authenticate with Frappe via login method
+    const response = await fetch(`${this.BASE_URL}/api/method/login`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ usr, pwd })
+    });
+
+    if (!response.ok) {
+        throw new Error("Invalid username or password");
+    }
+
+    const loginData = await response.json();
+    
+    // 2. Double check the user exists using the system API keys
+    // This ensures that even if the login call somehow bypassed security, 
+    // we verify the specific user record is valid for our system.
+    const userRes = await this.getList('User', { name: usr, enabled: 1 }, ['full_name', 'email']);
+    const user = userRes.message?.[0];
+    
+    if (!user) {
+      throw new Error("Access Denied: User account not found or disabled in system.");
+    }
+
+    return { 
+      username: usr, 
+      full_name: user.full_name || loginData.full_name || usr 
+    };
+  }
+
   static async verifyConnection() {
     const data = await this.fetch('frappe.auth.get_logged_user');
     const username = data.message;

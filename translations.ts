@@ -4,10 +4,13 @@ import { Language } from './types';
 export const translations: Record<Language, any> = {
   en: {
     appName: "Galaxy TMS",
-    loginTitle: "Galaxy Bot",
-    loginSubtitle: "Automated Transport Management",
+    loginTitle: "Galaxy Portal",
+    loginSubtitle: "Sign in to access your dashboard",
+    username: "Username",
+    password: "Password",
+    signIn: "Sign In",
     initSystem: "Initial Bot",
-    handshaking: "Connecting...",
+    handshaking: "Authenticating...",
     authReady: "Secret Token Ready",
     authMethod: "Auth Method",
     logout: "Logout",
@@ -56,14 +59,18 @@ export const translations: Record<Language, any> = {
     selectDriverErr: "Select a Driver",
     selectRouteErr: "Select a Route",
     savePrintErr: "Save before printing",
-    systemBlocked: "System Blocked"
+    systemBlocked: "Access Denied",
+    invalidCredentials: "Invalid username or password"
   },
   ar: {
     appName: "جالاكسي TMS",
-    loginTitle: "بوت جالاكسي",
-    loginSubtitle: "إدارة النقل المؤتمتة",
+    loginTitle: "بوابة جالاكسي",
+    loginSubtitle: "سجل الدخول للوصول إلى لوحة التحكم",
+    username: "اسم المستخدم",
+    password: "كلمة المرور",
+    signIn: "تسجيل الدخول",
     initSystem: "البوت الأولي",
-    handshaking: "جاري الاتصال...",
+    handshaking: "جاري التحقق...",
     authReady: "الرمز السري جاهز",
     authMethod: "طريقة المصادقة",
     logout: "خروج",
@@ -112,14 +119,18 @@ export const translations: Record<Language, any> = {
     selectDriverErr: "يجب اختيار سائق",
     selectRouteErr: "يجب اختيار مسار",
     savePrintErr: "احفظ البيانات أولاً",
-    systemBlocked: "النظام محظور"
+    systemBlocked: "تم رفض الوصول",
+    invalidCredentials: "اسم المستخدم أو كلمة المرور غير صحيحة"
   },
   ur: {
     appName: "گلیکسی TMS",
-    loginTitle: "گلیکسی بوٹ",
-    loginSubtitle: "ٹرانسپورٹ مینجمنٹ سسٹم",
+    loginTitle: "گلیکسی پورٹل",
+    loginSubtitle: "اپنے ڈیش بورڈ تک رسائی کے لیے سائن ان کریں",
+    username: "صارف نام",
+    password: "پاس ورڈ",
+    signIn: "سائن ان",
     initSystem: "ابتدائی بوٹ",
-    handshaking: "رابطہ ہو رہا ہے...",
+    handshaking: "تصدیق ہو رہی ہے...",
     authReady: "سیکیورٹی ٹوکن تیار ہے",
     authMethod: "تصدیق کا طریقہ",
     logout: "لاگ آؤٹ",
@@ -168,6 +179,7 @@ export const translations: Record<Language, any> = {
     selectDriverErr: "ڈرائیور منتخب کریں",
     selectRouteErr: "راستہ منتخب کریں",
     savePrintErr: "پرنٹ سے پہلے محفوظ کریں",
-    systemBlocked: "سسٹم بلاک ہے"
+    systemBlocked: "رسائی مسترد کر دی گئی",
+    invalidCredentials: "غلط صارف نام یا پاس ورڈ"
   }
 };

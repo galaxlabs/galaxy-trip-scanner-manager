@@ -13,18 +13,24 @@ interface LoginProps {
 const Login: React.FC<LoginProps> = ({ onLogin, lang, onLangChange }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  
   const t = translations[lang];
   const isRtl = lang === 'ar' || lang === 'ur';
 
-  const handleConnect = async () => {
+  const handleSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!username || !password) return;
+    
     setLoading(true);
     setError('');
     try {
-      const userData = await FrappeClient.verifyConnection();
+      const userData = await FrappeClient.login(username, password);
       onLogin(userData);
     } catch (err: any) {
       console.error(err);
-      setError(err.message);
+      setError(err.message === "Invalid username or password" ? t.invalidCredentials : err.message);
     } finally {
       setLoading(false);
     }
@@ -55,14 +61,14 @@ const Login: React.FC<LoginProps> = ({ onLogin, lang, onLangChange }) => {
         <p className="text-slate-500 mt-2 font-medium">{t.loginSubtitle}</p>
       </div>
 
-      <div className="w-full space-y-6 text-left rtl:text-right">
+      <div className="w-full space-y-6">
         {error && (
           <div className="bg-red-50 border border-red-100 p-5 rounded-3xl animate-in fade-in slide-in-from-top-4 duration-300">
             <div className="flex items-start gap-3">
               <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
                 <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd"/></svg>
               </div>
-              <div className="flex-1">
+              <div className="flex-1 text-left rtl:text-right">
                 <p className="text-sm font-bold text-red-700">{t.systemBlocked}</p>
                 <p className="text-xs text-red-600/80 mt-1 leading-relaxed">{error}</p>
               </div>
@@ -70,20 +76,40 @@ const Login: React.FC<LoginProps> = ({ onLogin, lang, onLangChange }) => {
           </div>
         )}
         
-        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-200/50 space-y-6">
-          <div className="flex items-center gap-4 text-slate-400">
-            <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        <form onSubmit={handleSignIn} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-200/50 space-y-6">
+          <div className="space-y-4">
+            <div className="relative">
+              <div className={`absolute top-1/2 -translate-y-1/2 ${isRtl ? 'right-4' : 'left-4'} text-slate-400`}>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+              </div>
+              <input 
+                type="text" 
+                placeholder={t.username}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+                className={`w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 ${isRtl ? 'pr-12 pl-4' : 'pl-12 pr-4'} text-sm font-bold text-slate-800 outline-none focus:ring-4 focus:ring-blue-100 transition-all`}
+              />
             </div>
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">{t.authMethod}</p>
-              <p className="text-sm font-bold text-slate-700">{t.authReady}</p>
+
+            <div className="relative">
+              <div className={`absolute top-1/2 -translate-y-1/2 ${isRtl ? 'right-4' : 'left-4'} text-slate-400`}>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+              </div>
+              <input 
+                type="password" 
+                placeholder={t.password}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className={`w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 ${isRtl ? 'pr-12 pl-4' : 'pl-12 pr-4'} text-sm font-bold text-slate-800 outline-none focus:ring-4 focus:ring-blue-100 transition-all`}
+              />
             </div>
           </div>
           
           <button
-            onClick={handleConnect}
-            disabled={loading}
+            type="submit"
+            disabled={loading || !username || !password}
             className="w-full bg-slate-900 text-white py-5 rounded-2xl font-bold text-lg shadow-lg shadow-slate-300 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-3 group"
           >
             {loading ? (
@@ -93,12 +119,12 @@ const Login: React.FC<LoginProps> = ({ onLogin, lang, onLangChange }) => {
               </>
             ) : (
               <>
-                <span>{t.initSystem}</span>
+                <span>{t.signIn}</span>
                 <svg className={`w-5 h-5 group-hover:translate-x-1 transition-transform ${isRtl ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
               </>
             )}
           </button>
-        </div>
+        </form>
       </div>
     </div>
   );
