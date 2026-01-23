@@ -2,9 +2,17 @@
 export class FrappeClient {
   private static BASE_URL = 'https://tms.galaxylabs.online';
   
-  // Use environment variables for production security
-  private static get API_KEY() { return process.env.FRAPPE_API_KEY || ''; }
-  private static get API_SECRET() { return process.env.FRAPPE_API_SECRET || ''; }
+  private static get API_KEY() { 
+    const key = process.env.FRAPPE_API_KEY;
+    if (!key) console.warn("Missing FRAPPE_API_KEY environment variable");
+    return key || ''; 
+  }
+
+  private static get API_SECRET() { 
+    const secret = process.env.FRAPPE_API_SECRET;
+    if (!secret) console.warn("Missing FRAPPE_API_SECRET environment variable");
+    return secret || ''; 
+  }
 
   static async fetch(method: string, params: any = {}, options: RequestInit = {}) {
     const url = new URL(`${this.BASE_URL}/api/method/${method}`);
@@ -40,7 +48,7 @@ export class FrappeClient {
 
     try {
       const response = await fetch(url.toString(), fetchOptions);
-      if (response.status === 401) throw new Error("Authentication Failed. Check API Keys.");
+      if (response.status === 401) throw new Error("Authentication Failed. Check API Keys in Vercel Settings.");
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         let msg = "Validation Failed";
