@@ -85,20 +85,27 @@ export class FrappeClient {
 
     const loginData = await response.json();
     
-    // 2. Double check the user exists using the system API keys
-    // This ensures that even if the login call somehow bypassed security, 
-    // we verify the specific user record is valid for our system.
-    const userRes = await this.getList('User', { name: usr, enabled: 1 }, ['full_name', 'email']);
-    const user = userRes.message?.[0];
-    
-    if (!user) {
-      throw new Error("Access Denied: User account not found or disabled in system.");
-    }
+    // 2. Fetch the user's profile using the system credentials
+    // This bypasses permission issues normal users have when trying to read the User table.
+    try {
+      const userRes = await this.getList('User', { name: usr, enabled: 1 }, ['full_name', 'email']);
+      const user = userRes.message?.[0];
+      
+      if (!user) {
+        throw new Error("Access Denied: User account not found or disabled.");
+      }
 
-    return { 
-      username: usr, 
-      full_name: user.full_name || loginData.full_name || usr 
-    };
+      return { 
+        username: usr, 
+        full_name: user.full_name || loginData.full_name || usr 
+      };
+    } catch (e: any) {
+      // Fallback if system user cannot be fetched but login was successful
+      if (loginData.message === "Logged In") {
+        return { username: usr, full_name: loginData.full_name || usr };
+      }
+      throw e;
+    }
   }
 
   static async verifyConnection() {

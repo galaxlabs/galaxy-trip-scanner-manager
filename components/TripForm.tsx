@@ -59,11 +59,6 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
     setTimeout(() => setToast({ message: '', type: null }), 3000);
   };
 
-  /**
-   * Compresses an image before sending to the API.
-   * This is critical for mobile devices where photos can be 5MB+.
-   * Large images cause timeouts or out-of-memory errors on Gemini/Frappe.
-   */
   const compressImage = (base64Str: string): Promise<string> => {
     return new Promise((resolve) => {
       const img = new Image();
@@ -91,10 +86,9 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx?.drawImage(img, 0, 0, width, height);
-        // Use JPEG with 0.7 quality for a good balance of size vs readability
         resolve(canvas.toDataURL('image/jpeg', 0.7));
       };
-      img.onerror = () => resolve(base64Str); // Fallback to original if compression fails
+      img.onerror = () => resolve(base64Str);
     });
   };
 
@@ -172,9 +166,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
         reader.onload = async () => {
             try {
                 const rawBase64 = reader.result as string;
-                // Compress before sending
                 const compressedBase64 = await compressImage(rawBase64);
-                
                 const extracted = await extractPassengerInfo(compressedBase64);
                 
                 if (extracted && extracted.length > 0) {
@@ -254,6 +246,10 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
     window.open(FrappeClient.getPrintUrl('Trip', formData.name), '_blank');
   };
 
+  const triggerUpload = () => {
+    if (fileInputRef.current) fileInputRef.current.click();
+  };
+
   return (
     <div className="flex flex-col h-full bg-slate-50 pb-28 relative">
       {/* Toast Notification */}
@@ -328,7 +324,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
 
         {/* AI Scanner Card */}
         <div className="bg-white p-7 rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-slate-100 relative overflow-hidden group text-left rtl:text-right">
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center justify-between mb-8 cursor-pointer" onClick={triggerUpload}>
                 <div>
                     <h3 className="text-sm font-black text-slate-900 uppercase tracking-tighter">{t.aiScanner}</h3>
                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">{t.multiDoc}</p>
@@ -337,7 +333,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                     <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                 </div>
             </div>
-            <button onClick={() => fileInputRef.current?.click()} disabled={queue.scanning} className="w-full bg-slate-900 text-white py-5 rounded-2xl flex items-center justify-center gap-3 active:scale-[0.98] transition-all shadow-xl shadow-slate-300 relative overflow-hidden">
+            <button onClick={triggerUpload} disabled={queue.scanning} className="w-full bg-slate-900 text-white py-5 rounded-2xl flex items-center justify-center gap-3 active:scale-[0.98] transition-all shadow-xl shadow-slate-300 relative overflow-hidden">
                 {queue.scanning ? (
                     <div className="flex items-center gap-3">
                         <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
@@ -358,8 +354,6 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
               multiple 
               className="hidden" 
               onChange={handleFileUpload}
-              // Helps mobile devices prioritize the camera
-              capture="environment"
             />
         </div>
 
