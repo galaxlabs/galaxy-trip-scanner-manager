@@ -130,18 +130,24 @@ export class FrappeClient {
   ];
   internalFields.forEach((f) => delete clean[f]);
 
+  // ✅ IMPORTANT: Do NOT send base64 data URI into Attach Image field
+  // Trip.qr_code is Attach Image, it expects file_url (not data:image/png;base64,...)
+  if (typeof clean.qr_code === "string" && clean.qr_code.startsWith("data:image/")) {
+    delete clean.qr_code;
+  }
+
   // 3) clean child table rows (passengers)
   if (Array.isArray(clean.passengers)) {
     clean.passengers = clean.passengers.map((p: any) => {
       const row: any = { ...(p || {}) };
 
       // remove internal + parent linkage fields (Frappe will rebuild)
-      ["name","owner","creation","modified","modified_by","docstatus","idx",
-       "parent","parenttype","parentfield","__onload","__last_sync_on"
+      [
+        "name","owner","creation","modified","modified_by","docstatus","idx",
+        "parent","parenttype","parentfield","__onload","__last_sync_on"
       ].forEach((f) => delete row[f]);
 
-      // IMPORTANT: keep correct child doctype used in your system
-      // Your data shows doctype is "Passengers"
+      // Your child table doctype is "Passengers"
       row.doctype = "Passengers";
       return row;
     });
