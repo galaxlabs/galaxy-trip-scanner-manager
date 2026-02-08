@@ -1,40 +1,43 @@
 // api/frappe.js
-// Vercel Serverless Function proxy for Frappe (Vite frontend)
-// - Browser calls: /api/frappe?method=frappe.client.get_list&doctype=Trip...
-// - Server adds token auth from Vercel env vars (NOT exposed to browser)
+// Vercel Serverless Function proxy for Frappe
+// Works with Vite frontend calling /api/frappe?method=...
 
 export default async function handler(req, res) {
+  // Handle preflight
+  if (req.method === "OPTIONS") {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-Frappe-Authorization, X-Requested-With"
+    );
+    return res.status(204).end();
+  }
+
   try {
     const BASE_URL = process.env.FRAPPE_BASE_URL || "https://tms.galaxylabs.online";
     const API_KEY = process.env.FRAPPE_API_KEY;
     const API_SECRET = process.env.FRAPPE_API_SECRET;
 
-    // ✅ HARD FAIL if env missing (so you don't waste time)
     if (!API_KEY || !API_SECRET) {
       return res.status(500).json({
         error: "Missing env vars on Vercel",
         missing: {
           FRAPPE_API_KEY: !API_KEY,
           FRAPPE_API_SECRET: !API_SECRET,
-          FRAPPE_BASE_URL: !process.env.FRAPPE_BASE_URL, // optional
+          FRAPPE_BASE_URL: !process.env.FRAPPE_BASE_URL,
         },
-        hint:
-          "Set FRAPPE_API_KEY and FRAPPE_API_SECRET in Vercel Project Settings for Production + Preview, then redeploy.",
       });
     }
 
     const { method, ...query } = req.query || {};
     if (!method) {
-      return res.status(400).json({
-        error: "Missing 'method' query param",
-        example:
-          "/api/frappe?method=frappe.client.get_list&doctype=Route&filters=%7B%7D&fields=%5B%22name%22%5D",
-      });
+      return res.status(400).json({ error: "Missing 'method' query param" });
     }
 
     const url = new URL(`${BASE_URL}/api/method/${method}`);
 
-    // Forward query params (except "method")
+    // Forward query params (except method)
     Object.entries(query).forEach(([k, v]) => {
       if (v === undefined || v === null) return;
       if (Array.isArray(v)) url.searchParams.set(k, String(v[0]));
@@ -52,15 +55,18 @@ export default async function handler(req, res) {
 
     const methodUpper = (req.method || "GET").toUpperCase();
 
-    let body = undefined;
+    let body;
     if (methodUpper !== "GET" && methodUpper !== "HEAD") {
-      // req.body may already be parsed by Vercel
-      if (req.body !== undefined && req.body !== null) {
+      // Vercel may give object body; ensure JSON string
+      if (req.body !== undefined && req.body !== null && req.body !== "") {
         body = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
+      } else {
+        body = "{}";
       }
       headers["Content-Type"] = req.headers["content-type"] || "application/json";
     }
 
+    // ✅ If fetch is missing, this will throw and you'll see debug
     const frappeRes = await fetch(url.toString(), {
       method: methodUpper,
       headers,
@@ -69,21 +75,23 @@ export default async function handler(req, res) {
 
     const text = await frappeRes.text();
 
-    // Helpful: allow browser to call this endpoint freely (same-origin anyway)
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Frappe-Authorization, X-Requested-With");
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-Frappe-Authorization, X-Requested-With"
+    );
 
     res.status(frappeRes.status);
-    res.setHeader(
-      "Content-Type",
-      frappeRes.headers.get("content-type") || "application/json"
-    );
+    res.setHeader("Content-Type", frappeRes.headers.get("content-type") || "application/json");
     return res.send(text);
   } catch (e) {
+    // ✅ return real error so you can see in browser
     return res.status(500).json({
-      error: "Proxy failed",
+      error: "Proxy crashed",
       details: String(e?.message || e),
+      hint:
+        "If details says 'fetch is not defined', set Vercel Node runtime to 18+ or use undici.",
     });
   }
 }
