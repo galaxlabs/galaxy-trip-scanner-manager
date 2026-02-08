@@ -1,24 +1,22 @@
 // FrappeClient.ts
-// Browser-safe session-cookie client for Frappe (recommended for Vercel frontend)
+// ✅ Browser-safe session-cookie client for Frappe (Vercel / any frontend)
+// ✅ Fixes your 401 + "not permitted / not whitelisted" issue by NOT using API key/secret in browser
+// NOTE: This requires server-side CORS + cookies configured on Frappe:
+//   allow_cors = your frontend origin (NOT "*")
+//   cors_allow_credentials = true
+//   cookie_samesite = "None"
+//   cookie_secure = 1
 
 export class FrappeClient {
   private static BASE_URL = "https://tms.galaxylabs.online";
 
-  /**
-   * Generic Frappe method caller:
-   * - Uses session cookies (sid) via credentials: "include"
-   * - No API key/secret in browser (secure)
-   */
-  static async fetch(
-    method: string,
-    params: any = {},
-    options: RequestInit = {}
-  ) {
+  // -----------------------------
+  // Internal helpers
+  // -----------------------------
+
+  private static buildUrl(method: string, params: any, reqMethod: string) {
     const url = new URL(`${this.BASE_URL}/api/method/${method}`);
 
-    const reqMethod = (options.method || "GET").toUpperCase();
-
-    // Attach params as querystring for GET
     if (reqMethod === "GET") {
       Object.keys(params || {}).forEach((key) => {
         const v = params[key];
@@ -28,6 +26,49 @@ export class FrappeClient {
         }
       });
     }
+
+    return url;
+  }
+
+  private static normalizeFrappeError(data: any): string {
+    if (!data) return "Request failed";
+
+    // Frappe: _server_messages is a JSON-string array
+    if (data._server_messages) {
+      try {
+        const msgs = JSON.parse(data._server_messages);
+        const text = (msgs || [])
+          .map((m: any) =>
+            typeof m === "string" ? m : m?.message || JSON.stringify(m)
+          )
+          .join(", ");
+        if (text) return text;
+      } catch {
+        // ignore
+      }
+      return String(data._server_messages);
+    }
+
+    if (typeof data.message === "string" && data.message) return data.message;
+
+    // Sometimes error is in message as HTML details (like your sample)
+    if (data.message && typeof data.message === "object") {
+      try {
+        return JSON.stringify(data.message);
+      } catch {
+        // ignore
+      }
+    }
+
+    return "Request failed";
+  }
+
+  // -----------------------------
+  // Core fetch
+  // -----------------------------
+  static async fetch(method: string, params: any = {}, options: RequestInit = {}) {
+    const reqMethod = (options.method || "GET").toUpperCase();
+    const url = this.buildUrl(method, params, reqMethod);
 
     const headers: HeadersInit = {
       Accept: "application/json",
@@ -40,51 +81,41 @@ export class FrappeClient {
       ...options,
       method: reqMethod,
       mode: "cors",
-      credentials: "include", // ✅ IMPORTANT: send/receive sid cookie
+      credentials: "include", // ✅ IMPORTANT: send/receive sid cookie cross-domain
       headers,
     };
 
-    // Attach JSON body for non-GET when body not already provided
+    // Attach JSON body for non-GET if not provided
     if (reqMethod !== "GET" && !fetchOptions.body && params && Object.keys(params).length) {
       fetchOptions.body = JSON.stringify(params);
     }
 
     const response = await fetch(url.toString(), fetchOptions);
 
-    // Handle auth error explicitly
-    if (response.status === 401) {
-      throw new Error("Unauthorized (401): Not logged in or session expired.");
-    }
-
-    // Parse JSON safely
+    // Parse response safely
     const data = await response.json().catch(() => ({}));
 
+    if (response.status === 401) {
+      throw new Error(
+        "401 Unauthorized: Not logged in / session cookie not sent. Fix CORS + SameSite=None; Secure on Frappe."
+      );
+    }
+
     if (!response.ok) {
-      // Frappe often returns _server_messages stringified JSON array
-      let msg = data?.message || "Request failed";
-      if (data?._server_messages) {
-        try {
-          const msgs = JSON.parse(data._server_messages);
-          msg = msgs
-            .map((m: any) =>
-              typeof m === "string" ? m : m?.message || JSON.stringify(m)
-            )
-            .join(", ");
-        } catch {
-          msg = data._server_messages;
-        }
-      }
-      throw new Error(msg);
+      const msg = this.normalizeFrappeError(data);
+      throw new Error(msg || `HTTP ${response.status}`);
     }
 
     return data;
   }
 
+  // -----------------------------
+  // Auth (Session Cookie)
+  // -----------------------------
+
   /**
-   * Login (sets sid cookie)
-   * IMPORTANT:
-   * - Use x-www-form-urlencoded, not JSON
-   * - Must use credentials: "include" to store cookie in browser
+   * Login using Frappe session cookies.
+   * Frappe login expects x-www-form-urlencoded.
    */
   static async login(usr: string, pwd: string) {
     const form = new URLSearchParams();
@@ -103,41 +134,65 @@ export class FrappeClient {
       credentials: "include",
     });
 
-    // Frappe sometimes returns 200 even for failure, so parse message too
     const data = await response.json().catch(() => ({}));
 
+    // Frappe typically returns {message:"Logged In"} on success
     if (!response.ok || (data?.message && data.message !== "Logged In")) {
       throw new Error("Invalid username or password");
     }
 
-    // Return user profile from session
-    return await this.verifyConnection();
+    // Store a minimal user object locally (optional)
+    const profile = await this.verifyConnection();
+    try {
+      localStorage.setItem("frappe_user", JSON.stringify(profile));
+    } catch {
+      // ignore
+    }
+    return profile;
   }
 
   /**
-   * Verify current session user
+   * Logout from server + clear local user
+   */
+  static async logout() {
+    try {
+      await this.fetch("logout", {}, { method: "POST" });
+    } catch {
+      // ignore
+    }
+    try {
+      localStorage.removeItem("frappe_user");
+    } catch {
+      // ignore
+    }
+  }
+
+  /**
+   * Check current session and return username/full_name if accessible
    */
   static async verifyConnection() {
-    const data = await this.fetch("frappe.auth.get_logged_user");
-    const username = data.message;
+    const who = await this.fetch("frappe.auth.get_logged_user");
+    const username = who?.message;
 
-    // Try fetching full_name (may fail due to permissions)
+    // If cookie not working, username may be "Guest"
+    if (!username || username === "Guest") {
+      return { username: "Guest", full_name: "Guest" };
+    }
+
+    // Try to fetch full name (might fail if user lacks permission)
     try {
-      const userDetails = await this.getList(
-        "User",
-        { name: username },
-        ["full_name", "email"]
-      );
-      const u = userDetails?.message?.[0];
-      return { username, full_name: u?.full_name || username, email: u?.email };
+      const userDetails = await this.getList("User", { name: username }, ["full_name"]);
+      const full_name = userDetails?.message?.[0]?.full_name || username;
+      return { username, full_name };
     } catch {
       return { username, full_name: username };
     }
   }
 
-  /**
-   * Get list (frappe.client.get_list)
-   */
+  // -----------------------------
+  // Data APIs (Frappe client)
+  // -----------------------------
+
   static async getList(
     doctype: string,
     filters: any = {},
@@ -145,13 +200,17 @@ export class FrappeClient {
     limit_page_length: number = 50,
     order_by: string = "creation desc"
   ) {
-    // Optional: owner filter for Trip for non-admin user (as you had)
-    const userStr =
-      typeof window !== "undefined" ? localStorage.getItem("frappe_user") : null;
-    const user = userStr ? JSON.parse(userStr) : null;
+    // Optional: owner restriction for Trip for non-admin
+    let user: any = null;
+    try {
+      const userStr = localStorage.getItem("frappe_user");
+      user = userStr ? JSON.parse(userStr) : null;
+    } catch {
+      // ignore
+    }
 
-    const finalFilters = { ...(filters || {}) };
-    if (user && user.username !== "Administrator" && doctype === "Trip") {
+    const finalFilters: any = { ...(filters || {}) };
+    if (user && user.username && user.username !== "Administrator" && doctype === "Trip") {
       finalFilters.owner = user.username;
     }
 
@@ -164,9 +223,6 @@ export class FrappeClient {
     });
   }
 
-  /**
-   * Get single doc (frappe.client.get)
-   */
   static async getDoc(doctype: string, name: string) {
     return this.fetch("frappe.client.get", { doctype, name });
   }
@@ -175,7 +231,6 @@ export class FrappeClient {
     const isNew = !doc?.name;
     const clean = { ...(doc || {}) };
 
-    // remove internal/readonly fields
     const internalFields = [
       "owner",
       "creation",
@@ -191,10 +246,10 @@ export class FrappeClient {
     ];
     internalFields.forEach((f) => delete clean[f]);
 
-    // default date
+    // Your default Trip departure date
     if (!clean.departure) clean.departure = new Date().toISOString().split("T")[0];
 
-    // child table normalization example
+    // Child table normalization (Passenger)
     if (clean.passengers) {
       clean.passengers = clean.passengers.map((p: any) => {
         const {
@@ -221,9 +276,6 @@ export class FrappeClient {
     return clean;
   }
 
-  /**
-   * Insert or Save doc
-   */
   static async saveDoc(doctype: string, doc: any) {
     const cleaned = this.cleanDoc(doc);
     const isNew = !cleaned.name;
@@ -235,27 +287,14 @@ export class FrappeClient {
     return res.message;
   }
 
+  // -----------------------------
+  // Print helpers
+  // -----------------------------
   static getPrintUrl(doctype: string, name: string, format?: string) {
     const fmt = format || doctype;
     return `${this.BASE_URL}/printview?doctype=${encodeURIComponent(
       doctype
-    )}&name=${encodeURIComponent(name)}&format=${encodeURIComponent(
-      fmt
-    )}&no_letterhead=0`;
-  }
-
-  /**
-   * Logout (server + local)
-   */
-  static async logout() {
-    try {
-      await this.fetch("logout", {}, { method: "POST" });
-    } catch {
-      // ignore
-    }
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("frappe_user");
-    }
+    )}&name=${encodeURIComponent(name)}&format=${encodeURIComponent(fmt)}&no_letterhead=0`;
   }
 }
 
