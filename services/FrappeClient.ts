@@ -1,25 +1,25 @@
 // services/FrappeClient.ts
-// Vite frontend client -> calls Vercel proxy (/api/frappe)
-// ✅ No direct calls to Frappe domain from browser
-// ✅ No cookies, no CORS issues
-// ✅ API key/secret stays ONLY in Vercel env (server-side)
+// ✅ Vite/React frontend -> calls Vercel Serverless proxy (/api/frappe)
+// ✅ Fixes CORS because browser no longer calls https://tms.galaxylabs.online directly
+// IMPORTANT: You must have api/frappe.js in repo and env vars set on Vercel.
 
 export class FrappeClient {
   /**
-   * Call Frappe method via Vercel proxy
-   * Example:
-   *   fetch("frappe.client.get_list", { doctype: "Trip", ... })
-   * becomes:
-   *   /api/frappe?method=frappe.client.get_list&doctype=Trip...
+   * Calls Vercel proxy endpoint:
+   *   /api/frappe?method=frappe.client.get_list&doctype=Route...
    */
-  static async fetch(method: string, params: any = {}, options: RequestInit = {}) {
+  static async fetch(
+    method: string,
+    params: any = {},
+    options: RequestInit = {}
+  ) {
     const reqMethod = (options.method || "GET").toUpperCase();
 
-    // same-origin proxy endpoint
+    // Same-origin proxy URL (your Vercel domain)
     const url = new URL("/api/frappe", window.location.origin);
     url.searchParams.set("method", method);
 
-    // For GET: querystring
+    // Send params via query for GET
     if (reqMethod === "GET") {
       Object.keys(params || {}).forEach((key) => {
         const v = params[key];
@@ -28,9 +28,6 @@ export class FrappeClient {
           url.searchParams.append(key, val);
         }
       });
-    } else {
-      // For POST/PUT etc, still include params in body (recommended)
-      // Keep query clean.
     }
 
     const headers: HeadersInit = {
@@ -46,16 +43,17 @@ export class FrappeClient {
       headers,
     };
 
+    // For POST/PUT: send JSON body
     if (reqMethod !== "GET" && !fetchOptions.body && params && Object.keys(params).length) {
       fetchOptions.body = JSON.stringify(params);
     }
 
     const response = await fetch(url.toString(), fetchOptions);
 
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({}));
-      let msg = data?.message || `HTTP ${response.status}`;
+    const data = await response.json().catch(() => ({}));
 
+    if (!response.ok) {
+      let msg = data?.message || `HTTP ${response.status}`;
       if (data?._server_messages) {
         try {
           const msgs = JSON.parse(data._server_messages);
@@ -66,14 +64,17 @@ export class FrappeClient {
           msg = data._server_messages;
         }
       }
-
       throw new Error(msg);
     }
 
-    return await response.json();
+    return data;
   }
 
-  static async getList(doctype: string, filters: any = {}, fields: string[] = ["*"]) {
+  static async getList(
+    doctype: string,
+    filters: any = {},
+    fields: string[] = ["*"]
+  ) {
     return this.fetch("frappe.client.get_list", {
       doctype,
       filters: JSON.stringify(filters),
@@ -87,16 +88,12 @@ export class FrappeClient {
     return this.fetch("frappe.client.get", { doctype, name });
   }
 
-  static getPrintUrl(doctype: string, name: string, format?: string) {
-    const fmt = format || doctype;
-    // Print URL still points to Frappe site, which is fine for opening in new tab
-    return `https://tms.galaxylabs.online/printview?doctype=${encodeURIComponent(
-      doctype
-    )}&name=${encodeURIComponent(name)}&format=${encodeURIComponent(fmt)}&no_letterhead=0`;
-  }
-
-  static logout() {
-    // If you used localStorage in UI, clear it here
-    localStorage.removeItem("frappe_user");
+  static async saveDoc(doctype: string, doc: any) {
+    // For save/insert, you can decide doc has name or not
+    const isNew = !doc?.name;
+    const method = isNew ? "frappe.client.insert" : "frappe.client.save";
+    const payload = { doc: JSON.stringify({ ...doc, doctype }) };
+    const res = await this.fetch(method, payload, { method: "POST" });
+    return res.message;
   }
 }
