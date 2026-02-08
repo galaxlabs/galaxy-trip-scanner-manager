@@ -115,12 +115,46 @@ export class FrappeClient {
   }
 
   static async saveDoc(doctype: string, doc: any) {
-    const isNew = !doc?.name;
-    const m = isNew ? "frappe.client.insert" : "frappe.client.save";
-    const payload = { doc: JSON.stringify({ ...doc, doctype }) };
-    const res = await this.fetch(m, payload, { method: "POST" });
-    return res.message;
+  const isNew = !doc?.name;
+
+  // 1) clone
+  const clean: any = { ...(doc || {}) };
+
+  // 2) remove internal/readonly fields (server will set these)
+  const internalFields = [
+    "owner", "creation", "modified", "modified_by",
+    "docstatus", "idx",
+    "__onload", "__last_sync_on",
+    "_user_tags", "_comments", "_assign", "_liked_by",
+    "amended_from"
+  ];
+  internalFields.forEach((f) => delete clean[f]);
+
+  // 3) clean child table rows (passengers)
+  if (Array.isArray(clean.passengers)) {
+    clean.passengers = clean.passengers.map((p: any) => {
+      const row: any = { ...(p || {}) };
+
+      // remove internal + parent linkage fields (Frappe will rebuild)
+      ["name","owner","creation","modified","modified_by","docstatus","idx",
+       "parent","parenttype","parentfield","__onload","__last_sync_on"
+      ].forEach((f) => delete row[f]);
+
+      // IMPORTANT: keep correct child doctype used in your system
+      // Your data shows doctype is "Passengers"
+      row.doctype = "Passengers";
+      return row;
+    });
   }
+
+  // 4) choose correct method
+  const method = isNew ? "frappe.client.insert" : "frappe.client.save";
+
+  const payload = { doc: JSON.stringify({ ...clean, doctype }) };
+  const res = await this.fetch(method, payload, { method: "POST" });
+  return res.message;
+}
+
 
   static getPrintUrl(doctype: string, name: string, format?: string) {
     const fmt = format || doctype;
