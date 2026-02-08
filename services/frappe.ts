@@ -4,69 +4,85 @@
 
 export class FrappeClient {
   static async fetch(method: string, params: any = {}, options: RequestInit = {}) {
-    const reqMethod = (options.method || "GET").toUpperCase();
+  const reqMethod = (options.method || "GET").toUpperCase();
 
-    // Same-origin proxy endpoint on Vercel
-    const url = new URL("/api/frappe", window.location.origin);
-    url.searchParams.set("method", method);
+  // Same-origin proxy endpoint on Vercel
+  const url = new URL("/api/frappe", window.location.origin);
+  url.searchParams.set("method", method);
 
-    // GET params -> querystring
-    if (reqMethod === "GET") {
-      Object.keys(params || {}).forEach((key) => {
-        const v = params[key];
-        if (v !== undefined && v !== null) {
-          const val = typeof v === "object" ? JSON.stringify(v) : String(v);
-          url.searchParams.append(key, val);
-        }
-      });
-    }
-
-    const headers: HeadersInit = {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      "X-Requested-With": "XMLHttpRequest",
-      ...(options.headers || {}),
-    };
-
-    const fetchOptions: RequestInit = {
-      ...options,
-      method: reqMethod,
-      headers,
-    };
-
-    // Non-GET: JSON body
-    if (
-      reqMethod !== "GET" &&
-      reqMethod !== "HEAD" &&
-      !fetchOptions.body &&
-      params &&
-      Object.keys(params).length
-    ) {
-      fetchOptions.body = JSON.stringify(params);
-    }
-
-    const response = await fetch(url.toString(), fetchOptions);
-    const data = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      let msg = data?.message || `HTTP ${response.status}`;
-
-      if (data?._server_messages) {
-        try {
-          const msgs = JSON.parse(data._server_messages);
-          msg = (msgs || [])
-            .map((m: any) => (typeof m === "string" ? m : m?.message || JSON.stringify(m)))
-            .join(", ");
-        } catch {
-          msg = data._server_messages;
-        }
+  // GET params -> querystring
+  if (reqMethod === "GET") {
+    Object.keys(params || {}).forEach((key) => {
+      const v = params[key];
+      if (v !== undefined && v !== null) {
+        const val = typeof v === "object" ? JSON.stringify(v) : String(v);
+        url.searchParams.append(key, val);
       }
+    });
+  }
 
-      throw new Error(msg);
+  const headers: HeadersInit = {
+    Accept: "application/json",
+    "Content-Type": "application/json",
+    "X-Requested-With": "XMLHttpRequest",
+    ...(options.headers || {}),
+  };
+
+  const fetchOptions: RequestInit = {
+    ...options,
+    method: reqMethod,
+    headers,
+  };
+
+  // Non-GET: JSON body
+  if (
+    reqMethod !== "GET" &&
+    reqMethod !== "HEAD" &&
+    !fetchOptions.body &&
+    params &&
+    Object.keys(params).length
+  ) {
+    fetchOptions.body = JSON.stringify(params);
+  }
+
+  const response = await fetch(url.toString(), fetchOptions);
+
+  // ✅ ALWAYS read text first (Frappe 500 often returns HTML/text, not JSON)
+  const rawText = await response.text();
+
+  // Try parse JSON if possible
+  let data: any = {};
+  try {
+    data = rawText ? JSON.parse(rawText) : {};
+  } catch {
+    data = {};
+  }
+
+  if (!response.ok) {
+    // Prefer frappe structured error
+    let msg = data?.message || `HTTP ${response.status}`;
+
+    if (data?._server_messages) {
+      try {
+        const msgs = JSON.parse(data._server_messages);
+        msg = (msgs || [])
+          .map((m: any) => (typeof m === "string" ? m : m?.message || JSON.stringify(m)))
+          .join(", ");
+      } catch {
+        msg = data._server_messages;
+      }
     }
 
-    return data;
+    // ✅ attach raw server response for debugging
+    const debug = rawText?.slice(0, 4000); // limit size
+    console.error("FRAPPE ERROR RAW:", debug);
+
+    throw new Error(`${msg}\n\n---RAW RESPONSE---\n${debug}`);
   }
+
+  return data;
+}
+
 
   // NOTE: Token-proxy approach doesn't require frappe login.
   // This is only for UI/local storage.
