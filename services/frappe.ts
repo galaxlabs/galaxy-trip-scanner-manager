@@ -180,8 +180,11 @@ export class FrappeClient {
 
   static getPrintUrl(doctype: string, name: string, format?: string) {
     const fmt = format || doctype;
-    return `https://tms.galaxylabs.online/printview?doctype=${encodeURIComponent(
-      doctype
-    )}&name=${encodeURIComponent(name)}&format=${encodeURIComponent(fmt)}&no_letterhead=0`;
+    const url = new URL("/api/print", window.location.origin);
+    url.searchParams.set("doctype", doctype);
+    url.searchParams.set("name", name);
+    url.searchParams.set("format", fmt);
+    url.searchParams.set("no_letterhead", "0");
+    return url.toString();
   }
 }
