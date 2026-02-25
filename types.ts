@@ -62,3 +62,41 @@ export interface User {
   username: string;
   full_name: string;
 }
+
+export interface VehicleInspectionChecklistItem {
+  name: string;
+  item?: string;
+  category?: string;
+  sort_order?: number;
+  is_active?: number;
+}
+
+export interface VehicleInspectionItem {
+  name?: string;
+  doctype?: 'Vehicle Inspection Item';
+  section?: string;
+  item_en?: string;
+  item?: string;
+  category?: string;
+  status: 'Sound | سليم' | 'Unsound | غير سليم';
+  notes?: string;
+  sort_order?: number;
+}
+
+export interface VehicleInspectionLog {
+  name?: string;
+  naming_series?: string;
+  inspection_no?: string;
+  inspection_date?: string;
+  driver?: string;
+  vehicle?: string;
+  vehicle_type?: string;
+  items: VehicleInspectionItem[];
+  auto_fill_checklist?: number;
+  declaration?: string;
+  driver_name_text?: string;
+  driver_signature?: string;
+  supervisor_name_text?: string;
+  supervisor_signature?: string;
+  overall_notes?: string;
+}

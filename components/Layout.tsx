@@ -7,15 +7,17 @@ interface LayoutProps {
   children: React.ReactNode;
   user: User;
   currentView: string;
+  activeModule: 'trip' | 'inspection';
   lang: Language;
   onLogout: () => void;
   onLangChange: (lang: Language) => void;
-  onNavigate: (view: 'dashboard' | 'create') => void;
+  onNavigate: (view: 'dashboard' | 'create' | 'switch_module') => void;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, user, currentView, lang, onLogout, onLangChange, onNavigate }) => {
+export const Layout: React.FC<LayoutProps> = ({ children, user, currentView, activeModule, lang, onLogout, onLangChange, onNavigate }) => {
   const t = translations[lang];
   const isRtl = lang === 'ar' || lang === 'ur';
+  const createLabel = activeModule === 'trip' ? t.newTrip : t.newInspection;
   
   // Dynamic font class based on language
   const fontClass = lang === 'ar' ? 'font-ar' : lang === 'ur' ? 'font-ur' : '';
@@ -72,14 +74,15 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, currentView, lan
           <div className="bg-blue-600 -mt-10 w-14 h-14 rounded-[1.5rem] flex items-center justify-center text-white shadow-xl shadow-blue-200 border-4 border-white">
             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 4v16m8-8H4"/></svg>
           </div>
-          <span className="text-[10px] font-black uppercase tracking-widest mt-1">{t.newTrip}</span>
+          <span className="text-[10px] font-black uppercase tracking-widest mt-1">{createLabel}</span>
         </button>
 
         <button 
-          className="flex flex-col items-center gap-1.5 text-slate-400 opacity-50 cursor-not-allowed"
+          onClick={() => onNavigate('switch_module')}
+          className={`flex flex-col items-center gap-1.5 transition-colors ${activeModule === 'inspection' ? 'text-blue-600' : 'text-slate-400'}`}
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-          <span className="text-[10px] font-black uppercase tracking-widest">{t.routes}</span>
+          <span className="text-[10px] font-black uppercase tracking-widest">{t.inspections}</span>
         </button>
       </nav>
     </div>
