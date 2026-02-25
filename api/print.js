@@ -1,6 +1,47 @@
 // api/print.js
 // Authenticated print proxy for Frappe printview HTML
 
+function toFileProxyUrl(rawValue, baseUrl) {
+  if (!rawValue) return rawValue;
+  const value = String(rawValue).trim();
+
+  if (
+    value.startsWith("data:") ||
+    value.startsWith("blob:") ||
+    value.startsWith("javascript:") ||
+    value.startsWith("#")
+  ) {
+    return value;
+  }
+
+  if (value.startsWith("/files/") || value.startsWith("/private/files/")) {
+    return `/api/file?path=${encodeURIComponent(value)}`;
+  }
+
+  try {
+    const parsed = new URL(value, baseUrl);
+    const base = new URL(baseUrl);
+    if (
+      parsed.origin === base.origin &&
+      (parsed.pathname.startsWith("/files/") || parsed.pathname.startsWith("/private/files/"))
+    ) {
+      return `/api/file?url=${encodeURIComponent(parsed.toString())}`;
+    }
+  } catch {
+    // leave untouched if URL parsing fails
+  }
+
+  return value;
+}
+
+function rewriteAssetLinks(html, baseUrl) {
+  return html.replace(/(src|href)=["']([^"']+)["']/gi, (match, attr, value) => {
+    const rewritten = toFileProxyUrl(value, baseUrl);
+    if (rewritten === value) return match;
+    return `${attr}="${rewritten}"`;
+  });
+}
+
 export default async function handler(req, res) {
   if (req.method === "OPTIONS") {
     res.setHeader("Access-Control-Allow-Origin", "*");
@@ -56,6 +97,7 @@ export default async function handler(req, res) {
     });
 
     const html = await frappeRes.text();
+    const patchedHtml = rewriteAssetLinks(html, BASE_URL);
 
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
@@ -65,7 +107,7 @@ export default async function handler(req, res) {
     );
     res.status(frappeRes.status);
     res.setHeader("Content-Type", "text/html; charset=utf-8");
-    return res.send(html);
+    return res.send(patchedHtml);
   } catch (e) {
     return res.status(500).json({
       error: "Print proxy crashed",
@@ -73,4 +115,3 @@ export default async function handler(req, res) {
     });
   }
 }
-
