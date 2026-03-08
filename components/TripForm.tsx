@@ -33,6 +33,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
   const [confirmModal, setConfirmModal] = useState<{ title: string; desc: string; action: () => void } | null>(null);
   
   const t = translations[lang];
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -160,14 +161,54 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
     showToast(t.returnSuccess, "success");
   };
 
+  const isPdfFile = (file: File): boolean =>
+    file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+
+  const isImageFile = (file: File): boolean => file.type.startsWith('image/');
+
+  const normalizeText = (value?: string): string =>
+    (value || '')
+      .normalize('NFKC')
+      .trim()
+      .replace(/\s+/g, ' ')
+      .toUpperCase();
+
+  const normalizeDocumentNumber = (value?: string): string =>
+    normalizeText(value).replace(/[^A-Z0-9]/g, '');
+
+  const getPassengerKey = (p: Passenger): string => {
+    const docKey = normalizeDocumentNumber(p.document_number);
+    if (docKey) return `DOC:${docKey}`;
+    const nameKey = normalizeText(p.passenger_name);
+    const natKey = normalizeText(p.nationality);
+    return `NAME:${nameKey}|NAT:${natKey}`;
+  };
+
+  const mergeUniquePassengers = (existing: Passenger[], incoming: Passenger[]): Passenger[] => {
+    const result = [...existing];
+    const seen = new Set(result.map(getPassengerKey));
+
+    for (const p of incoming) {
+      const key = getPassengerKey(p);
+      if (!seen.has(key)) {
+        seen.add(key);
+        result.push(p);
+      }
+    }
+    return result;
+  };
+
   const processFile = (file: File): Promise<void> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = async () => {
             try {
                 const rawBase64 = reader.result as string;
-                const compressedBase64 = await compressImage(rawBase64);
-                const extracted = await extractPassengerInfo(compressedBase64);
+                const imageFile = isImageFile(file);
+                const pdfFile = isPdfFile(file);
+                const preparedBase64 = imageFile ? await compressImage(rawBase64) : rawBase64;
+                const mimeType = pdfFile ? 'application/pdf' : 'image/jpeg';
+                const extracted = await extractPassengerInfo(preparedBase64, mimeType);
                 
                 if (extracted && extracted.length > 0) {
                     const newPassengers: Passenger[] = extracted.map(p => ({
@@ -177,11 +218,11 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                     }));
                     setFormData(prev => ({
                         ...prev,
-                        passengers: [...(prev.passengers || []), ...newPassengers]
+                        passengers: mergeUniquePassengers(prev.passengers || [], newPassengers)
                     }));
                     setIsDirty(true);
                 } else {
-                    const info = await extractTripInfo(compressedBase64);
+                    const info = await extractTripInfo(preparedBase64, mimeType);
                     if (info && Object.keys(info).length > 0) {
                         setFormData(prev => ({ ...prev, ...info }));
                         setIsDirty(true);
@@ -201,7 +242,12 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-    const fileList = Array.from(files) as File[];
+    const fileList = Array.from(files).filter((file) => isImageFile(file) || isPdfFile(file)) as File[];
+    if (fileList.length === 0) {
+      showToast(t.invalidUploadType, "error");
+      if (e.target) e.target.value = '';
+      return;
+    }
     setQueue({ total: fileList.length, processed: 0, scanning: true });
     
     let failures = 0;
@@ -217,6 +263,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
     
     setQueue(q => ({ ...q, scanning: false }));
     if (fileInputRef.current) fileInputRef.current.value = '';
+    if (cameraInputRef.current) cameraInputRef.current.value = '';
     
     if (failures > 0) {
         showToast(`Failed to process ${failures} file(s)`, "error");
@@ -248,6 +295,10 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
 
   const triggerUpload = () => {
     if (fileInputRef.current) fileInputRef.current.click();
+  };
+
+  const triggerCamera = () => {
+    if (cameraInputRef.current) cameraInputRef.current.click();
   };
 
   return (
@@ -324,7 +375,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
 
         {/* AI Scanner Card */}
         <div className="bg-white p-7 rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-slate-100 relative overflow-hidden group text-left rtl:text-right">
-            <div className="flex items-center justify-between mb-8 cursor-pointer" onClick={triggerUpload}>
+            <div className="flex items-center justify-between mb-8 cursor-pointer" onClick={triggerCamera}>
                 <div>
                     <h3 className="text-sm font-black text-slate-900 uppercase tracking-tighter">{t.aiScanner}</h3>
                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">{t.multiDoc}</p>
@@ -333,6 +384,10 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                     <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                 </div>
             </div>
+            <button onClick={triggerCamera} disabled={queue.scanning} className="w-full mb-3 bg-blue-600 text-white py-4 rounded-2xl flex items-center justify-center gap-3 active:scale-[0.98] transition-all shadow-lg shadow-blue-200">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M9 13a3 3 0 106 0 3 3 0 00-6 0z"/></svg>
+                <span className="text-xs font-black uppercase tracking-widest">{t.openCamera}</span>
+            </button>
             <button onClick={triggerUpload} disabled={queue.scanning} className="w-full bg-slate-900 text-white py-5 rounded-2xl flex items-center justify-center gap-3 active:scale-[0.98] transition-all shadow-xl shadow-slate-300 relative overflow-hidden">
                 {queue.scanning ? (
                     <div className="flex items-center gap-3">
@@ -347,10 +402,18 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                 )}
                 {queue.scanning && <div className="absolute bottom-0 left-0 h-1 bg-blue-400 transition-all duration-300" style={{ width: `${(queue.processed / queue.total) * 100}%` }}></div>}
             </button>
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={handleFileUpload}
+            />
             <input 
               ref={fileInputRef} 
               type="file" 
-              accept="image/*" 
+              accept="image/*,.pdf,application/pdf" 
               multiple 
               className="hidden" 
               onChange={handleFileUpload}

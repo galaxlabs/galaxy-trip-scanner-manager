@@ -38,6 +38,7 @@ export const translations: Record<Language, any> = {
     syncing: "Syncing...",
     aiScanner: "Smart Scanner",
     multiDoc: "Data Extraction",
+    openCamera: "Open Camera",
     batchUpload: "Upload Documents",
     scanning: "Scanning",
     operationalSetup: "Operational Setup",
@@ -74,6 +75,7 @@ export const translations: Record<Language, any> = {
     selectDriverErr: "Select a Driver",
     selectRouteErr: "Select a Route",
     savePrintErr: "Save before printing",
+    invalidUploadType: "Only images and PDF files are allowed",
     systemBlocked: "Access Denied",
     invalidCredentials: "Invalid username or password"
   },
@@ -113,6 +115,7 @@ export const translations: Record<Language, any> = {
     syncing: "جاري الحفظ...",
     aiScanner: "الماسح الذكي",
     multiDoc: "استخراج البيانات",
+    openCamera: "فتح الكاميرا",
     batchUpload: "تحميل الوثائق",
     scanning: "جاري المسح",
     operationalSetup: "الإعدادات التشغيلية",
@@ -149,6 +152,7 @@ export const translations: Record<Language, any> = {
     selectDriverErr: "يجب اختيار سائق",
     selectRouteErr: "يجب اختيار مسار",
     savePrintErr: "احفظ البيانات أولاً",
+    invalidUploadType: "يُسمح فقط بالصور وملفات PDF",
     systemBlocked: "تم رفض الوصول",
     invalidCredentials: "اسم المستخدم أو كلمة المرور غير صحيحة"
   },
@@ -188,6 +192,7 @@ export const translations: Record<Language, any> = {
     syncing: "محفوظ ہو رہا ہے...",
     aiScanner: "اسمارٹ اسکینر",
     multiDoc: "دستاویز سے ڈیٹا نکالیں",
+    openCamera: "کیمرا کھولیں",
     batchUpload: "دستاویزات اپ لوڈ کریں",
     scanning: "اسکیننگ",
     operationalSetup: "آپریشنل سیٹ اپ",
@@ -224,6 +229,7 @@ export const translations: Record<Language, any> = {
     selectDriverErr: "ڈرائیور منتخب کریں",
     selectRouteErr: "راستہ منتخب کریں",
     savePrintErr: "پرنٹ سے پہلے محفوظ کریں",
+    invalidUploadType: "صرف تصاویر اور PDF فائلیں اجازت یافتہ ہیں",
     systemBlocked: "رسائی مسترد کر دی گئی",
     invalidCredentials: "غلط صارف نام یا پاس ورڈ"
   }

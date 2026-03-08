@@ -13,7 +13,12 @@ export interface ExtractedPassenger {
   contact?: string;
 }
 
-export const extractPassengerInfo = async (base64Image: string): Promise<ExtractedPassenger[]> => {
+const extractDataPart = (base64Data: string): string => base64Data.split(',')[1] || base64Data;
+
+export const extractPassengerInfo = async (
+  base64Data: string,
+  mimeType: string = "image/jpeg"
+): Promise<ExtractedPassenger[]> => {
   const model = 'gemini-3-flash-preview';
   
   const response = await ai.models.generateContent({
@@ -22,8 +27,8 @@ export const extractPassengerInfo = async (base64Image: string): Promise<Extract
       parts: [
         {
           inlineData: {
-            mimeType: "image/jpeg",
-            data: base64Image.split(',')[1] || base64Image
+            mimeType,
+            data: extractDataPart(base64Data)
           }
         },
         {
@@ -60,15 +65,18 @@ export const extractPassengerInfo = async (base64Image: string): Promise<Extract
   }
 };
 
-export const extractTripInfo = async (base64Image: string): Promise<any> => {
+export const extractTripInfo = async (
+  base64Data: string,
+  mimeType: string = "image/jpeg"
+): Promise<any> => {
     const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: {
           parts: [
             {
               inlineData: {
-                mimeType: "image/jpeg",
-                data: base64Image.split(',')[1] || base64Image
+                mimeType,
+                data: extractDataPart(base64Data)
               }
             },
             {
