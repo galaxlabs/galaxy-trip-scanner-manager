@@ -1,8 +1,6 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
-
-// Strictly use environment variable
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// services/geminiService.ts
+// Frontend helper: calls the server-side `/api/gemini` function (Vertex AI).
 
 export interface ExtractedPassenger {
   name: string;
@@ -13,52 +11,40 @@ export interface ExtractedPassenger {
   contact?: string;
 }
 
-const extractDataPart = (base64Data: string): string => base64Data.split(',')[1] || base64Data;
+async function callGemini<T>(
+  task: "passengers" | "trip",
+  base64Data: string,
+  mimeType: string
+): Promise<T> {
+  const url = new URL("/api/gemini", window.location.origin);
+  const res = await fetch(url.toString(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ task, base64Data, mimeType }),
+  });
+
+  const rawText = await res.text();
+  let payload: any = null;
+  try {
+    payload = rawText ? JSON.parse(rawText) : null;
+  } catch {
+    payload = null;
+  }
+
+  if (!res.ok || !payload?.ok) {
+    const msg = payload?.error || `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+
+  return payload.data as T;
+}
 
 export const extractPassengerInfo = async (
   base64Data: string,
   mimeType: string = "image/jpeg"
 ): Promise<ExtractedPassenger[]> => {
-  const model = 'gemini-3-flash-preview';
-  
-  const response = await ai.models.generateContent({
-    model,
-    contents: {
-      parts: [
-        {
-          inlineData: {
-            mimeType,
-            data: extractDataPart(base64Data)
-          }
-        },
-        {
-          text: `Extract all passenger details from this document. Provide JSON array.`
-        }
-      ]
-    },
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            name: { type: Type.STRING },
-            passport: { type: Type.STRING },
-            nationality: { type: Type.STRING },
-            document_type: { type: Type.STRING },
-            expiry_date: { type: Type.STRING },
-            contact: { type: Type.STRING }
-          },
-          required: ["name", "passport", "nationality"]
-        }
-      }
-    }
-  });
-
   try {
-    const jsonStr = (response.text || "").trim();
-    return JSON.parse(jsonStr);
+    return await callGemini<ExtractedPassenger[]>("passengers", base64Data, mimeType);
   } catch (err) {
     console.error("Gemini parse failed", err);
     return [];
@@ -69,38 +55,10 @@ export const extractTripInfo = async (
   base64Data: string,
   mimeType: string = "image/jpeg"
 ): Promise<any> => {
-    const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: {
-          parts: [
-            {
-              inlineData: {
-                mimeType,
-                data: extractDataPart(base64Data)
-              }
-            },
-            {
-              text: "Extract vehicle and trip info."
-            }
-          ]
-        },
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-                reg_no: { type: Type.STRING },
-                compny: { type: Type.STRING },
-                phone: { type: Type.STRING },
-                model: { type: Type.STRING }
-            }
-          }
-        }
-      });
-      
-      try {
-        return JSON.parse(response.text || "{}");
-      } catch (e) {
-        return {};
-      }
-}
+  try {
+    return await callGemini<Record<string, any>>("trip", base64Data, mimeType);
+  } catch (e) {
+    console.error("Gemini parse failed", e);
+    return {};
+  }
+};
