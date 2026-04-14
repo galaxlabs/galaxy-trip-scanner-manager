@@ -62,19 +62,22 @@ function getAiClient() {
 function buildPassengerRequest({ base64Data, mimeType, model }) {
   return {
     model,
-    contents: {
-      parts: [
-        {
-          inlineData: {
-            mimeType,
-            data: extractDataPart(base64Data),
+    contents: [
+      {
+        role: "user",
+        parts: [
+          {
+            inlineData: {
+              mimeType,
+              data: extractDataPart(base64Data),
+            },
           },
-        },
-        {
-          text: "Extract all passenger details from this document. Provide JSON array.",
-        },
-      ],
-    },
+          {
+            text: "Extract all passenger details from this document. Provide JSON array.",
+          },
+        ],
+      },
+    ],
     config: {
       responseMimeType: "application/json",
       responseSchema: {
@@ -99,17 +102,20 @@ function buildPassengerRequest({ base64Data, mimeType, model }) {
 function buildTripRequest({ base64Data, mimeType, model }) {
   return {
     model,
-    contents: {
-      parts: [
-        {
-          inlineData: {
-            mimeType,
-            data: extractDataPart(base64Data),
+    contents: [
+      {
+        role: "user",
+        parts: [
+          {
+            inlineData: {
+              mimeType,
+              data: extractDataPart(base64Data),
+            },
           },
-        },
-        { text: "Extract vehicle and trip info." },
-      ],
-    },
+          { text: "Extract vehicle and trip info." },
+        ],
+      },
+    ],
     config: {
       responseMimeType: "application/json",
       responseSchema: {
@@ -182,4 +188,3 @@ export default async function handler(req, res) {
     });
   }
 }
-
