@@ -256,12 +256,17 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
     setQueue({ total: fileList.length, processed: 0, scanning: true });
     
     let failures = 0;
+    let firstError = "";
     for (let i = 0; i < fileList.length; i++) {
         try { 
           await processFile(fileList[i]); 
         } catch (err) { 
           console.error(`Scan error ${i + 1}`, err);
           failures++;
+          if (!firstError) {
+            const msg = String((err as any)?.message || err || "");
+            firstError = msg.slice(0, 180);
+          }
         }
         setQueue(q => ({ ...q, processed: i + 1 }));
     }
@@ -271,7 +276,10 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
     if (cameraInputRef.current) cameraInputRef.current.value = '';
     
     if (failures > 0) {
-        showToast(`Failed to process ${failures} file(s)`, "error");
+        showToast(
+          `Failed to process ${failures} file(s)${firstError ? `: ${firstError}` : ""}`,
+          "error"
+        );
     } else {
         showToast(t.syncSuccess, "success");
     }

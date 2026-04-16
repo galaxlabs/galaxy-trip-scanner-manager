@@ -86,24 +86,14 @@ export const extractPassengerInfo = async (
   base64Data: string,
   mimeType: string = "image/jpeg"
 ): Promise<ExtractedPassenger[]> => {
-  try {
-    const raw = await callGemini<any>("passengers", base64Data, mimeType);
-    const list = Array.isArray(raw) ? raw : [];
-    return list.map(normalizeExtractedPassenger).filter(Boolean) as ExtractedPassenger[];
-  } catch (err) {
-    console.error("Gemini parse failed", err);
-    return [];
-  }
+  const raw = await callGemini<any>("passengers", base64Data, mimeType);
+  const list = Array.isArray(raw) ? raw : [];
+  return list.map(normalizeExtractedPassenger).filter(Boolean) as ExtractedPassenger[];
 };
 
 export const extractTripInfo = async (
   base64Data: string,
   mimeType: string = "image/jpeg"
 ): Promise<any> => {
-  try {
-    return await callGemini<Record<string, any>>("trip", base64Data, mimeType);
-  } catch (e) {
-    console.error("Gemini parse failed", e);
-    return {};
-  }
+  return await callGemini<Record<string, any>>("trip", base64Data, mimeType);
 };

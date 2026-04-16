@@ -59,6 +59,35 @@ function getAiClient() {
   return cachedAi;
 }
 
+let cachedApiKeyAi;
+function getApiKeyClient() {
+  if (cachedApiKeyAi) return cachedApiKeyAi;
+
+  const apiKey =
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    process.env.API_KEY;
+
+  if (!apiKey) {
+    const err = new Error("Missing GEMINI_API_KEY (or GOOGLE_API_KEY / API_KEY)");
+    err.code = "MISSING_GEMINI_API_KEY";
+    throw err;
+  }
+
+  cachedApiKeyAi = new GoogleGenAI({ apiKey });
+  return cachedApiKeyAi;
+}
+
+function shouldFallbackToApiKey(e) {
+  const msg = String(e?.message || e || "");
+  return (
+    msg.includes("BILLING_DISABLED") ||
+    msg.includes("requires billing to be enabled") ||
+    msg.includes("Enable billing") ||
+    msg.includes("aiplatform.googleapis.com")
+  );
+}
+
 function buildPassengerRequest({ base64Data, mimeType, model }) {
   return {
     model,
@@ -170,14 +199,21 @@ export default async function handler(req, res) {
     }
 
     const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-    const ai = getAiClient();
 
     const request =
       normalizedTask === "passengers"
         ? buildPassengerRequest({ base64Data, mimeType: mimeType || "image/jpeg", model })
         : buildTripRequest({ base64Data, mimeType: mimeType || "image/jpeg", model });
 
-    const response = await ai.models.generateContent(request);
+    let response;
+    try {
+      // Prefer Vertex AI when configured, but it will fail if billing is disabled.
+      response = await getAiClient().models.generateContent(request);
+    } catch (e) {
+      if (!shouldFallbackToApiKey(e)) throw e;
+      // Fallback to Gemini Developer API if an API key is present.
+      response = await getApiKeyClient().models.generateContent(request);
+    }
 
     const rawText = (response.text || "").trim();
 
