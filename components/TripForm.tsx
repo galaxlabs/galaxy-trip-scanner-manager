@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Trip, Route, Staff, Passenger, Language } from '../types';
 import { FrappeClient } from '../services/frappe';
-import { extractPassengerInfo, extractTripInfo } from '../services/geminiService';
+import { extractDocumentInfo } from '../services/geminiService';
 import { translations } from '../translations';
 
 interface TripFormProps {
@@ -35,6 +35,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
   const t = translations[lang];
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
   useEffect(() => {
     const fetchData = async () => {
@@ -208,10 +209,27 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                 const pdfFile = isPdfFile(file);
                 const preparedBase64 = imageFile ? await compressImage(rawBase64) : rawBase64;
                 const mimeType = pdfFile ? 'application/pdf' : 'image/jpeg';
-                const extracted = await extractPassengerInfo(preparedBase64, mimeType);
-                
-                if (extracted && extracted.length > 0) {
-                    const newPassengers: Passenger[] = extracted.map(p => ({
+                let extractedPassengers: any[] = [];
+                let extractedTrip: any = {};
+
+                for (let attempt = 0; attempt < 3; attempt++) {
+                    try {
+                        const result = await extractDocumentInfo(preparedBase64, mimeType);
+                        extractedPassengers = result.passengers || [];
+                        extractedTrip = result.trip || {};
+                        break;
+                    } catch (err: any) {
+                        const retryAfter = Number(err?.retryAfterSeconds || 0);
+                        if (retryAfter > 0 && attempt < 2) {
+                            await sleep((retryAfter + 1) * 1000);
+                            continue;
+                        }
+                        throw err;
+                    }
+                }
+
+                if (extractedPassengers && extractedPassengers.length > 0) {
+                    const newPassengers: Passenger[] = extractedPassengers.map(p => ({
                         passenger_name: p.name,
                         document_number: p.passport,
                         nationality: p.nationality,
@@ -227,9 +245,8 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                     }));
                     setIsDirty(true);
                 } else {
-                    const info = await extractTripInfo(preparedBase64, mimeType);
-                    if (info && Object.keys(info).length > 0) {
-                        setFormData(prev => ({ ...prev, ...info }));
+                    if (extractedTrip && Object.keys(extractedTrip).length > 0) {
+                        setFormData(prev => ({ ...prev, ...extractedTrip }));
                         setIsDirty(true);
                     }
                 }

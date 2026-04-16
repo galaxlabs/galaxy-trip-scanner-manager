@@ -55,10 +55,10 @@ function normalizeExtractedPassenger(input: any): ExtractedPassenger | null {
 }
 
 async function callGemini<T>(
-  task: "passengers" | "trip",
+  task: "passengers" | "trip" | "auto",
   base64Data: string,
   mimeType: string
-): Promise<T> {
+): Promise<{ data: T; provider?: string }> {
   const url = new URL("/api/gemini", window.location.origin);
   const res = await fetch(url.toString(), {
     method: "POST",
@@ -76,17 +76,26 @@ async function callGemini<T>(
 
   if (!res.ok || !payload?.ok) {
     const msg = payload?.error || `HTTP ${res.status}`;
-    throw new Error(msg);
+    const err: any = new Error(msg);
+    err.status = res.status;
+    const retryAfterHeader = res.headers.get("Retry-After");
+    const retryAfterSeconds =
+      payload?.retryAfterSeconds ??
+      (retryAfterHeader ? Number(retryAfterHeader) : undefined);
+    if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+      err.retryAfterSeconds = retryAfterSeconds;
+    }
+    throw err;
   }
 
-  return payload.data as T;
+  return { data: payload.data as T, provider: payload.provider };
 }
 
 export const extractPassengerInfo = async (
   base64Data: string,
   mimeType: string = "image/jpeg"
 ): Promise<ExtractedPassenger[]> => {
-  const raw = await callGemini<any>("passengers", base64Data, mimeType);
+  const { data: raw } = await callGemini<any>("passengers", base64Data, mimeType);
   const list = Array.isArray(raw) ? raw : [];
   return list.map(normalizeExtractedPassenger).filter(Boolean) as ExtractedPassenger[];
 };
@@ -95,5 +104,26 @@ export const extractTripInfo = async (
   base64Data: string,
   mimeType: string = "image/jpeg"
 ): Promise<any> => {
-  return await callGemini<Record<string, any>>("trip", base64Data, mimeType);
+  const { data } = await callGemini<Record<string, any>>("trip", base64Data, mimeType);
+  return data;
+};
+
+export const extractDocumentInfo = async (
+  base64Data: string,
+  mimeType: string = "image/jpeg"
+): Promise<{
+  passengers: ExtractedPassenger[];
+  trip: Record<string, any>;
+  provider?: string;
+}> => {
+  const { data, provider } = await callGemini<any>("auto", base64Data, mimeType);
+
+  const rawPassengers = Array.isArray(data?.passengers) ? data.passengers : [];
+  const passengers = rawPassengers
+    .map(normalizeExtractedPassenger)
+    .filter(Boolean) as ExtractedPassenger[];
+
+  const trip = data?.trip && typeof data.trip === "object" && !Array.isArray(data.trip) ? data.trip : {};
+
+  return { passengers, trip, provider };
 };

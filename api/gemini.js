@@ -10,6 +10,30 @@ function withCors(res) {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 }
 
+function parseErrorPayload(message) {
+  if (!message) return null;
+  const raw = String(message);
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function getRetryAfterSeconds(errorPayload) {
+  const details = errorPayload?.error?.details;
+  if (!Array.isArray(details)) return null;
+
+  const retryInfo = details.find((d) => d && d["@type"] === "type.googleapis.com/google.rpc.RetryInfo");
+  const retryDelay = retryInfo?.retryDelay; // e.g. "8s"
+  if (typeof retryDelay === "string" && retryDelay.endsWith("s")) {
+    const seconds = Number(retryDelay.slice(0, -1));
+    if (Number.isFinite(seconds) && seconds > 0) return Math.ceil(seconds);
+  }
+
+  return null;
+}
+
 function extractDataPart(base64Data) {
   if (!base64Data) return "";
   const value = String(base64Data);
@@ -91,7 +115,11 @@ function shouldFallbackToApiKey(e) {
     // If Vertex credentials are missing/misconfigured, allow falling back
     // to the Gemini Developer API when an API key is available.
     msg.includes("Missing GOOGLE_SERVICE_ACCOUNT_KEY") ||
-    msg.includes("Invalid GOOGLE_SERVICE_ACCOUNT_KEY JSON")
+    msg.includes("Invalid GOOGLE_SERVICE_ACCOUNT_KEY JSON") ||
+    msg.includes("API keys are not supported by this API") ||
+    msg.includes("Expected OAuth2 access token") ||
+    msg.includes("CREDENTIALS_MISSING") ||
+    msg.includes("\"status\":\"UNAUTHENTICATED\"")
   );
 }
 
@@ -185,6 +213,62 @@ function buildTripRequest({ base64Data, mimeType, model }) {
   };
 }
 
+function buildAutoRequest({ base64Data, mimeType, model }) {
+  return {
+    model,
+    contents: [
+      {
+        role: "user",
+        parts: [
+          {
+            inlineData: {
+              mimeType,
+              data: extractDataPart(base64Data),
+            },
+          },
+          {
+            text:
+              "Extract BOTH passenger details and trip/vehicle info from this document.\n" +
+              "Return JSON with keys: passengers (array) and trip (object).",
+          },
+        ],
+      },
+    ],
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          passengers: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                name: { type: Type.STRING },
+                passport: { type: Type.STRING },
+                nationality: { type: Type.STRING },
+                document_type: { type: Type.STRING },
+                expiry_date: { type: Type.STRING },
+                contact: { type: Type.STRING },
+              },
+              required: ["name", "passport", "nationality"],
+            },
+          },
+          trip: {
+            type: Type.OBJECT,
+            properties: {
+              reg_no: { type: Type.STRING },
+              compny: { type: Type.STRING },
+              phone: { type: Type.STRING },
+              model: { type: Type.STRING },
+            },
+          },
+        },
+      },
+    },
+  };
+}
+
 export default async function handler(req, res) {
   if (req.method === "OPTIONS") {
     withCors(res);
@@ -209,12 +293,15 @@ export default async function handler(req, res) {
     const { task, base64Data, mimeType } = body || {};
     const normalizedTask = String(task || "").toLowerCase();
 
-    if (!normalizedTask || (normalizedTask !== "passengers" && normalizedTask !== "trip")) {
+    if (
+      !normalizedTask ||
+      (normalizedTask !== "passengers" && normalizedTask !== "trip" && normalizedTask !== "auto")
+    ) {
       withCors(res);
       return res.status(400).json({
         ok: false,
         error: "Invalid task",
-        expected: ["passengers", "trip"],
+        expected: ["passengers", "trip", "auto"],
       });
     }
 
@@ -228,14 +315,18 @@ export default async function handler(req, res) {
     const request =
       normalizedTask === "passengers"
         ? buildPassengerRequest({ base64Data, mimeType: mimeType || "image/jpeg", model })
-        : buildTripRequest({ base64Data, mimeType: mimeType || "image/jpeg", model });
+        : normalizedTask === "trip"
+          ? buildTripRequest({ base64Data, mimeType: mimeType || "image/jpeg", model })
+          : buildAutoRequest({ base64Data, mimeType: mimeType || "image/jpeg", model });
 
     let response;
+    let provider = "vertex";
     const providerMode = getProviderMode();
 
     if (providerMode === "vertex") {
       response = await getAiClient().models.generateContent(request);
     } else if (providerMode === "api_key") {
+      provider = "gemini_api_key";
       response = await getApiKeyClient().models.generateContent(request);
     } else {
       // auto
@@ -252,9 +343,11 @@ export default async function handler(req, res) {
           response = await getAiClient().models.generateContent(request);
         } catch (e) {
           if (!hasApiKeyConfig() || !shouldFallbackToApiKey(e)) throw e;
+          provider = "gemini_api_key";
           response = await getApiKeyClient().models.generateContent(request);
         }
       } else {
+        provider = "gemini_api_key";
         response = await getApiKeyClient().models.generateContent(request);
       }
     }
@@ -279,13 +372,13 @@ export default async function handler(req, res) {
     }
 
     let data;
+    const fallbackValue =
+      normalizedTask === "passengers" ? [] : normalizedTask === "trip" ? {} : { passengers: [], trip: {} };
+
     try {
-      data = parseJsonLoose(
-        rawText,
-        normalizedTask === "passengers" ? [] : {}
-      );
-    } catch (e) {
-      data = normalizedTask === "passengers" ? [] : {};
+      data = parseJsonLoose(rawText, fallbackValue);
+    } catch {
+      data = fallbackValue;
     }
 
     // Normalize shape so the frontend logic stays stable:
@@ -302,19 +395,41 @@ export default async function handler(req, res) {
       } else {
         data = [];
       }
-    } else {
+    } else if (normalizedTask === "trip") {
       if (Array.isArray(data)) data = data[0] || {};
       if (!data || typeof data !== "object") data = {};
+    } else {
+      // task=auto
+      if (!data || typeof data !== "object") data = {};
+      if (Array.isArray(data.passengers)) {
+        // ok
+      } else if (data.passengers && typeof data.passengers === "object") {
+        data.passengers = [data.passengers];
+      } else {
+        data.passengers = [];
+      }
+      if (!data.trip || typeof data.trip !== "object" || Array.isArray(data.trip)) {
+        data.trip = {};
+      }
     }
 
     withCors(res);
-    return res.status(200).json({ ok: true, data });
+    return res.status(200).json({ ok: true, data, provider });
   } catch (e) {
     withCors(res);
-    return res.status(500).json({
+    const parsed = parseErrorPayload(e?.message);
+    const code = parsed?.error?.code;
+    const status =
+      typeof code === "number" && code >= 400 && code <= 599 ? code : 500;
+
+    const retryAfterSeconds = parsed ? getRetryAfterSeconds(parsed) : null;
+    if (retryAfterSeconds) res.setHeader("Retry-After", String(retryAfterSeconds));
+
+    return res.status(status).json({
       ok: false,
       error: String(e?.message || e),
       code: e?.code,
+      retryAfterSeconds,
     });
   }
 }
