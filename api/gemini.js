@@ -74,7 +74,10 @@ function getApiKeyClient() {
     throw err;
   }
 
-  cachedApiKeyAi = new GoogleGenAI({ apiKey });
+  // Explicitly force Gemini Developer API. Otherwise, if your environment has
+  // GOOGLE_GENAI_USE_VERTEXAI=true, the SDK will route API-key calls to Vertex
+  // and Vertex will reject API keys for generateContent.
+  cachedApiKeyAi = new GoogleGenAI({ apiKey, vertexai: false });
   return cachedApiKeyAi;
 }
 
@@ -84,8 +87,30 @@ function shouldFallbackToApiKey(e) {
     msg.includes("BILLING_DISABLED") ||
     msg.includes("requires billing to be enabled") ||
     msg.includes("Enable billing") ||
-    msg.includes("aiplatform.googleapis.com")
+    msg.includes("aiplatform.googleapis.com") ||
+    // If Vertex credentials are missing/misconfigured, allow falling back
+    // to the Gemini Developer API when an API key is available.
+    msg.includes("Missing GOOGLE_SERVICE_ACCOUNT_KEY") ||
+    msg.includes("Invalid GOOGLE_SERVICE_ACCOUNT_KEY JSON")
   );
+}
+
+function getProviderMode() {
+  const raw = String(process.env.GEMINI_PROVIDER || "").trim().toLowerCase();
+  if (raw === "vertex" || raw === "api_key" || raw === "auto") return raw;
+  return "auto";
+}
+
+function hasVertexConfig() {
+  return Boolean(
+    process.env.GOOGLE_CLOUD_PROJECT &&
+      process.env.GOOGLE_CLOUD_LOCATION &&
+      process.env.GOOGLE_SERVICE_ACCOUNT_KEY
+  );
+}
+
+function hasApiKeyConfig() {
+  return Boolean(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY);
 }
 
 function buildPassengerRequest({ base64Data, mimeType, model }) {
@@ -206,13 +231,32 @@ export default async function handler(req, res) {
         : buildTripRequest({ base64Data, mimeType: mimeType || "image/jpeg", model });
 
     let response;
-    try {
-      // Prefer Vertex AI when configured, but it will fail if billing is disabled.
+    const providerMode = getProviderMode();
+
+    if (providerMode === "vertex") {
       response = await getAiClient().models.generateContent(request);
-    } catch (e) {
-      if (!shouldFallbackToApiKey(e)) throw e;
-      // Fallback to Gemini Developer API if an API key is present.
+    } else if (providerMode === "api_key") {
       response = await getApiKeyClient().models.generateContent(request);
+    } else {
+      // auto
+      if (!hasVertexConfig() && !hasApiKeyConfig()) {
+        const err = new Error(
+          "Missing Gemini credentials: set Vertex vars (GOOGLE_CLOUD_PROJECT, GOOGLE_CLOUD_LOCATION, GOOGLE_SERVICE_ACCOUNT_KEY) or set GEMINI_API_KEY."
+        );
+        err.code = "MISSING_GEMINI_CREDENTIALS";
+        throw err;
+      }
+
+      if (hasVertexConfig()) {
+        try {
+          response = await getAiClient().models.generateContent(request);
+        } catch (e) {
+          if (!hasApiKeyConfig() || !shouldFallbackToApiKey(e)) throw e;
+          response = await getApiKeyClient().models.generateContent(request);
+        }
+      } else {
+        response = await getApiKeyClient().models.generateContent(request);
+      }
     }
 
     const rawText = (response.text || "").trim();

@@ -10,9 +10,15 @@ This is a Vite + React app deployed on Vercel. Gemini calls are made **server-si
 
 Set these **Vercel Environment Variables** (Project → Settings → Environment Variables):
 
+### Option A: Vertex AI (service account)
 - `GOOGLE_CLOUD_PROJECT` (example: `quiet-radius-430208-t4`)
 - `GOOGLE_CLOUD_LOCATION` (example: `us-central1`)
 - `GOOGLE_SERVICE_ACCOUNT_KEY` (paste the full service-account JSON contents)
+
+### Option B: Gemini Developer API (AI Studio key)
+- `GEMINI_API_KEY`
+
+- Optional: `GEMINI_PROVIDER` = `auto` (default) | `vertex` | `api_key`
 - Optional: `GEMINI_MODEL` (default: `gemini-2.5-flash`)
 
 The frontend calls `POST /api/gemini` and the server function `api/gemini.js` talks to Vertex AI using the service account.
