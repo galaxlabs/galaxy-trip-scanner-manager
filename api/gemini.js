@@ -143,7 +143,16 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { task, base64Data, mimeType } = req.body || {};
+    let body = req.body;
+    if (typeof body === "string") {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        body = null;
+      }
+    }
+
+    const { task, base64Data, mimeType } = body || {};
     const normalizedTask = String(task || "").toLowerCase();
 
     if (!normalizedTask || (normalizedTask !== "passengers" && normalizedTask !== "trip")) {
@@ -170,11 +179,52 @@ export default async function handler(req, res) {
 
     const response = await ai.models.generateContent(request);
 
+    const rawText = (response.text || "").trim();
+
+    function parseJsonLoose(value, fallback) {
+      if (!value) return fallback;
+      try {
+        const parsed = JSON.parse(value);
+        if (typeof parsed === "string") {
+          try {
+            return JSON.parse(parsed);
+          } catch {
+            return parsed;
+          }
+        }
+        return parsed;
+      } catch {
+        return fallback;
+      }
+    }
+
     let data;
     try {
-      data = JSON.parse((response.text || "").trim() || (normalizedTask === "passengers" ? "[]" : "{}"));
-    } catch {
+      data = parseJsonLoose(
+        rawText,
+        normalizedTask === "passengers" ? [] : {}
+      );
+    } catch (e) {
       data = normalizedTask === "passengers" ? [] : {};
+    }
+
+    // Normalize shape so the frontend logic stays stable:
+    // - task=passengers => always an array
+    // - task=trip => always an object
+    if (normalizedTask === "passengers") {
+      if (Array.isArray(data)) {
+        // ok
+      } else if (data && typeof data === "object" && Array.isArray(data.passengers)) {
+        data = data.passengers;
+      } else if (data && typeof data === "object") {
+        // Sometimes models return a single object.
+        data = [data];
+      } else {
+        data = [];
+      }
+    } else {
+      if (Array.isArray(data)) data = data[0] || {};
+      if (!data || typeof data !== "object") data = {};
     }
 
     withCors(res);

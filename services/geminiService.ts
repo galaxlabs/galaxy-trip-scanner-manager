@@ -11,6 +11,49 @@ export interface ExtractedPassenger {
   contact?: string;
 }
 
+function normalizeExtractedPassenger(input: any): ExtractedPassenger | null {
+  if (!input || typeof input !== "object") return null;
+
+  const name =
+    input.name ??
+    input.passenger_name ??
+    input.full_name ??
+    input.passengerName ??
+    "";
+
+  const passport =
+    input.passport ??
+    input.document_number ??
+    input.documentNumber ??
+    input.passport_number ??
+    input.passportNumber ??
+    "";
+
+  const nationality =
+    input.nationality ??
+    input.country ??
+    input.nationality_code ??
+    input.nationalityCode ??
+    "";
+
+  const document_type = input.document_type ?? input.documentType;
+  const expiry_date = input.expiry_date ?? input.expiryDate;
+  const contact = input.contact ?? input.contact_no ?? input.contactNo;
+
+  const normalized: ExtractedPassenger = {
+    name: String(name || ""),
+    passport: String(passport || ""),
+    nationality: String(nationality || ""),
+    document_type: document_type ? String(document_type) : undefined,
+    expiry_date: expiry_date ? String(expiry_date) : undefined,
+    contact: contact ? String(contact) : undefined,
+  };
+
+  // If we don't have the minimum fields, treat as unusable.
+  if (!normalized.name && !normalized.passport && !normalized.nationality) return null;
+  return normalized;
+}
+
 async function callGemini<T>(
   task: "passengers" | "trip",
   base64Data: string,
@@ -44,7 +87,9 @@ export const extractPassengerInfo = async (
   mimeType: string = "image/jpeg"
 ): Promise<ExtractedPassenger[]> => {
   try {
-    return await callGemini<ExtractedPassenger[]>("passengers", base64Data, mimeType);
+    const raw = await callGemini<any>("passengers", base64Data, mimeType);
+    const list = Array.isArray(raw) ? raw : [];
+    return list.map(normalizeExtractedPassenger).filter(Boolean) as ExtractedPassenger[];
   } catch (err) {
     console.error("Gemini parse failed", err);
     return [];

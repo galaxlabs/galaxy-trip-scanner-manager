@@ -215,6 +215,11 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                         passenger_name: p.name,
                         document_number: p.passport,
                         nationality: p.nationality,
+                        contact_no: p.contact,
+                        document_type: p.document_type,
+                        expiry_date: p.expiry_date,
+                        source: 'scan',
+                        is_auto_filled: 1,
                     }));
                     setFormData(prev => ({
                         ...prev,
