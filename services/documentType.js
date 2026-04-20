@@ -6,6 +6,12 @@ const FRAPPE_DOCUMENT_TYPES = new Set([
   "Other",
 ]);
 
+const FRAPPE_PASSENGER_SOURCES = new Set([
+  "BOOKING",
+  "OCR",
+  "MANUAL",
+]);
+
 function normalizeToken(value) {
   return String(value || "")
     .normalize("NFKC")
@@ -52,4 +58,34 @@ export function normalizePassengerDocumentType(value) {
   if (normalized.includes("other")) return "Other";
 
   return "Other";
+}
+
+export function normalizePassengerSource(value, options = {}) {
+  const normalized = normalizeToken(value);
+  const isAutoFilled =
+    options.isAutoFilled === true ||
+    options.isAutoFilled === 1 ||
+    options.isAutoFilled === "1";
+
+  for (const allowed of FRAPPE_PASSENGER_SOURCES) {
+    if (normalized === allowed.toLowerCase()) return allowed;
+  }
+
+  if (normalized === "scan" || normalized === "scanner" || normalized === "ocr") {
+    return "OCR";
+  }
+
+  if (normalized === "manual" || normalized === "manually added") {
+    return "MANUAL";
+  }
+
+  if (normalized === "booking" || normalized === "booked") {
+    return "BOOKING";
+  }
+
+  if (!normalized) {
+    return isAutoFilled ? "OCR" : "MANUAL";
+  }
+
+  return undefined;
 }

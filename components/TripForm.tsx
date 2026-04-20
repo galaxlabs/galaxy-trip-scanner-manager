@@ -236,7 +236,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                         contact_no: p.contact,
                         document_type: p.document_type,
                         expiry_date: p.expiry_date,
-                        source: 'scan',
+                        source: 'OCR',
                         is_auto_filled: 1,
                     }));
                     setFormData(prev => ({
@@ -480,7 +480,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                         <div className="w-1.5 h-4 bg-emerald-500 rounded-full"></div>
                         <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">{t.manifest} ({formData.passengers?.length || 0})</h4>
                     </div>
-                    <button onClick={() => { setFormData(prev => ({ ...prev, passengers: [...(prev.passengers || []), { passenger_name: '', document_number: '', nationality: '' }] })); setIsDirty(true); }} className="text-[9px] font-black text-blue-600 bg-blue-50 px-3.5 py-2 rounded-xl uppercase active:scale-95 transition-all">
+                    <button onClick={() => { setFormData(prev => ({ ...prev, passengers: [...(prev.passengers || []), { passenger_name: '', document_number: '', nationality: '', source: 'MANUAL' }] })); setIsDirty(true); }} className="text-[9px] font-black text-blue-600 bg-blue-50 px-3.5 py-2 rounded-xl uppercase active:scale-95 transition-all">
                         + {t.addRecord}
                     </button>
                 </div>

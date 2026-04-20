@@ -2,7 +2,10 @@
 // ✅ Vite frontend -> calls Vercel proxy (/api/frappe)
 // ✅ No direct calls to tms.galaxylabs.online from browser (avoids CORS)
 
-import { normalizePassengerDocumentType } from "./documentType.js";
+import {
+  normalizePassengerDocumentType,
+  normalizePassengerSource,
+} from "./documentType.js";
 
 export class FrappeClient {
   static async fetch(method: string, params: any = {}, options: RequestInit = {}) {
@@ -173,6 +176,15 @@ export class FrappeClient {
         row.document_type = normalizedDocumentType;
       } else {
         delete row.document_type;
+      }
+
+      const normalizedSource = normalizePassengerSource(row.source, {
+        isAutoFilled: row.is_auto_filled,
+      });
+      if (normalizedSource) {
+        row.source = normalizedSource;
+      } else {
+        delete row.source;
       }
 
       return row;
