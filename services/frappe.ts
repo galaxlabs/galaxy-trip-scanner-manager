@@ -2,6 +2,8 @@
 // ✅ Vite frontend -> calls Vercel proxy (/api/frappe)
 // ✅ No direct calls to tms.galaxylabs.online from browser (avoids CORS)
 
+import { normalizePassengerDocumentType } from "./documentType.js";
+
 export class FrappeClient {
   static async fetch(method: string, params: any = {}, options: RequestInit = {}) {
   const reqMethod = (options.method || "GET").toUpperCase();
@@ -165,6 +167,14 @@ export class FrappeClient {
 
       // Your child table doctype is "Passengers"
       row.doctype = "Passengers";
+
+      const normalizedDocumentType = normalizePassengerDocumentType(row.document_type);
+      if (normalizedDocumentType) {
+        row.document_type = normalizedDocumentType;
+      } else {
+        delete row.document_type;
+      }
+
       return row;
     });
   }

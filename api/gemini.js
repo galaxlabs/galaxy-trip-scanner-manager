@@ -155,7 +155,10 @@ function buildPassengerRequest({ base64Data, mimeType, model }) {
             },
           },
           {
-            text: "Extract all passenger details from this document. Provide JSON array.",
+            text:
+              "Extract all passenger details from this document. Provide JSON array. " +
+              "For document_type, only return one of: Passport, Aqama, Nusuk, Visa, Other. " +
+              "If the document says Umrah or an entry/visit visa, return Visa.",
           },
         ],
       },
@@ -229,7 +232,9 @@ function buildAutoRequest({ base64Data, mimeType, model }) {
           {
             text:
               "Extract BOTH passenger details and trip/vehicle info from this document.\n" +
-              "Return JSON with keys: passengers (array) and trip (object).",
+              "Return JSON with keys: passengers (array) and trip (object).\n" +
+              "For passenger document_type, only return one of: Passport, Aqama, Nusuk, Visa, Other.\n" +
+              "If the document says Umrah or an entry/visit visa, return Visa.",
           },
         ],
       },

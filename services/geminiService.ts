@@ -2,6 +2,8 @@
 // services/geminiService.ts
 // Frontend helper: calls the server-side `/api/gemini` function (Vertex AI).
 
+import { normalizePassengerDocumentType } from "./documentType.js";
+
 export interface ExtractedPassenger {
   name: string;
   passport: string;
@@ -44,7 +46,7 @@ function normalizeExtractedPassenger(input: any): ExtractedPassenger | null {
     name: String(name || ""),
     passport: String(passport || ""),
     nationality: String(nationality || ""),
-    document_type: document_type ? String(document_type) : undefined,
+    document_type: normalizePassengerDocumentType(document_type),
     expiry_date: expiry_date ? String(expiry_date) : undefined,
     contact: contact ? String(contact) : undefined,
   };
