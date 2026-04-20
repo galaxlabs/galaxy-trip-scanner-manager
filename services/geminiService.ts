@@ -2,15 +2,10 @@
 // services/geminiService.ts
 // Frontend helper: calls the server-side `/api/gemini` function (Vertex AI).
 
-import { normalizePassengerDocumentType } from "./documentType.js";
-
 export interface ExtractedPassenger {
   name: string;
   passport: string;
   nationality: string;
-  document_type?: string;
-  expiry_date?: string;
-  contact?: string;
 }
 
 function normalizeExtractedPassenger(input: any): ExtractedPassenger | null {
@@ -38,17 +33,10 @@ function normalizeExtractedPassenger(input: any): ExtractedPassenger | null {
     input.nationalityCode ??
     "";
 
-  const document_type = input.document_type ?? input.documentType;
-  const expiry_date = input.expiry_date ?? input.expiryDate;
-  const contact = input.contact ?? input.contact_no ?? input.contactNo;
-
   const normalized: ExtractedPassenger = {
     name: String(name || ""),
     passport: String(passport || ""),
     nationality: String(nationality || ""),
-    document_type: normalizePassengerDocumentType(document_type),
-    expiry_date: expiry_date ? String(expiry_date) : undefined,
-    contact: contact ? String(contact) : undefined,
   };
 
   // If we don't have the minimum fields, treat as unusable.

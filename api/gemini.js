@@ -156,9 +156,8 @@ function buildPassengerRequest({ base64Data, mimeType, model }) {
           },
           {
             text:
-              "Extract all passenger details from this document. Provide JSON array. " +
-              "For document_type, only return one of: Passport, Aqama, Nusuk, Visa, Other. " +
-              "If the document says Umrah or an entry/visit visa, return Visa.",
+              "Extract only the core passenger details from this document. Provide JSON array. " +
+              "Return only: name, passport, nationality.",
           },
         ],
       },
@@ -173,9 +172,6 @@ function buildPassengerRequest({ base64Data, mimeType, model }) {
             name: { type: Type.STRING },
             passport: { type: Type.STRING },
             nationality: { type: Type.STRING },
-            document_type: { type: Type.STRING },
-            expiry_date: { type: Type.STRING },
-            contact: { type: Type.STRING },
           },
           required: ["name", "passport", "nationality"],
         },
@@ -233,8 +229,7 @@ function buildAutoRequest({ base64Data, mimeType, model }) {
             text:
               "Extract BOTH passenger details and trip/vehicle info from this document.\n" +
               "Return JSON with keys: passengers (array) and trip (object).\n" +
-              "For passenger document_type, only return one of: Passport, Aqama, Nusuk, Visa, Other.\n" +
-              "If the document says Umrah or an entry/visit visa, return Visa.",
+              "For each passenger, return only: name, passport, nationality.",
           },
         ],
       },
@@ -252,9 +247,6 @@ function buildAutoRequest({ base64Data, mimeType, model }) {
                 name: { type: Type.STRING },
                 passport: { type: Type.STRING },
                 nationality: { type: Type.STRING },
-                document_type: { type: Type.STRING },
-                expiry_date: { type: Type.STRING },
-                contact: { type: Type.STRING },
               },
               required: ["name", "passport", "nationality"],
             },

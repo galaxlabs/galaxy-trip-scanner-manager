@@ -89,3 +89,22 @@ export function normalizePassengerSource(value, options = {}) {
 
   return undefined;
 }
+
+function cleanText(value) {
+  const cleaned = String(value || "").trim();
+  return cleaned || undefined;
+}
+
+export function sanitizePassengerPayload(row) {
+  const sanitized = {
+    passenger_name: cleanText(row?.passenger_name),
+    document_number: cleanText(row?.document_number),
+    nationality: cleanText(row?.nationality),
+  };
+
+  if (!sanitized.passenger_name && !sanitized.document_number && !sanitized.nationality) {
+    return null;
+  }
+
+  return sanitized;
+}

@@ -2,10 +2,7 @@
 // ✅ Vite frontend -> calls Vercel proxy (/api/frappe)
 // ✅ No direct calls to tms.galaxylabs.online from browser (avoids CORS)
 
-import {
-  normalizePassengerDocumentType,
-  normalizePassengerSource,
-} from "./documentType.js";
+import { sanitizePassengerPayload } from "./documentType.js";
 
 export class FrappeClient {
   static async fetch(method: string, params: any = {}, options: RequestInit = {}) {
@@ -168,27 +165,14 @@ export class FrappeClient {
         "parent","parenttype","parentfield","__onload","__last_sync_on"
       ].forEach((f) => delete row[f]);
 
-      // Your child table doctype is "Passengers"
-      row.doctype = "Passengers";
+      const sanitizedRow = sanitizePassengerPayload(row);
+      if (!sanitizedRow) return null;
 
-      const normalizedDocumentType = normalizePassengerDocumentType(row.document_type);
-      if (normalizedDocumentType) {
-        row.document_type = normalizedDocumentType;
-      } else {
-        delete row.document_type;
-      }
-
-      const normalizedSource = normalizePassengerSource(row.source, {
-        isAutoFilled: row.is_auto_filled,
-      });
-      if (normalizedSource) {
-        row.source = normalizedSource;
-      } else {
-        delete row.source;
-      }
-
-      return row;
-    });
+      return {
+        ...sanitizedRow,
+        doctype: "Passengers",
+      };
+    }).filter(Boolean);
   }
 
   // 4) choose correct method

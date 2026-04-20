@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   normalizePassengerDocumentType,
   normalizePassengerSource,
+  sanitizePassengerPayload,
 } from "../services/documentType.js";
 
 test("maps Umrah-like document labels to Frappe's Visa option", () => {
@@ -35,4 +36,35 @@ test("maps legacy and inferred passenger sources to allowed Frappe values", () =
 test("infers a safe default source when the value is blank", () => {
   assert.equal(normalizePassengerSource("", { isAutoFilled: 1 }), "OCR");
   assert.equal(normalizePassengerSource(undefined, { isAutoFilled: 0 }), "MANUAL");
+});
+
+test("keeps only the passenger fields we want to store in Frappe", () => {
+  assert.deepEqual(
+    sanitizePassengerPayload({
+      passenger_name: "  John Doe  ",
+      document_number: " P12345 ",
+      nationality: " PK ",
+      document_type: "Visa",
+      expiry_date: "21/02/2036",
+      contact_no: "123",
+      source: "OCR",
+      is_auto_filled: 1,
+    }),
+    {
+      passenger_name: "John Doe",
+      document_number: "P12345",
+      nationality: "PK",
+    }
+  );
+});
+
+test("drops fully empty passenger rows before save", () => {
+  assert.equal(
+    sanitizePassengerPayload({
+      passenger_name: " ",
+      document_number: "",
+      nationality: undefined,
+    }),
+    null
+  );
 });
