@@ -28,7 +28,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) 
         FrappeClient.getList('Trip', {}, [
           'name', 'trip_status', 'from_location', 'to_location', 'departure', 'driver', 'assigned_vehicle', 'trip_route', 'distance', 'duration_minutes', 'trip_invoice', 'trip_invoice_created'
         ]),
-        FrappeClient.getList('Route', {}, ['name', 'from_place_full', 'to_place_full', 'distance', 'duration_minutes', 'return_route'])
+        FrappeClient.getList('Route', {}, ['name', 'from_place_full', 'to_place_full', 'distance', 'duration_minutes', 'return_route', 'route_value'])
       ]);
       const nextTrips = tripsRes.message || [];
       setTrips(nextTrips);
@@ -75,6 +75,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) 
         from_location: fullDoc.from_location,
         to_location: fullDoc.to_location,
         distance: fullDoc.distance,
+        trip_value: fullDoc.trip_value,
         duration_minutes: fullDoc.duration_minutes,
         passengers: fullDoc.passengers?.map(({ name, parent, parentfield, parenttype, doctype, owner, creation, modified, ...rest }: any) => rest),
         trip_status: 'Scheduled',
@@ -112,6 +113,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) 
           returnData.trip_route = matchingRoute.name;
           returnData.distance = matchingRoute.distance;
           returnData.duration_minutes = matchingRoute.duration_minutes;
+          returnData.trip_value = matchingRoute.route_value || baseData.trip_value;
       } else {
           returnData.trip_route = "";
       }
@@ -125,7 +127,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) 
     e.stopPropagation();
     setActiveMenu(null);
     if (trip.trip_invoice) {
-      window.open(`/app/trip-invoice/${encodeURIComponent(trip.trip_invoice)}`, '_blank');
+      window.open(FrappeClient.getDeskUrl('Trip Invoice', trip.trip_invoice), '_blank');
     }
   };
 

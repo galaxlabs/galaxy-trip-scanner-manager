@@ -28,6 +28,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
     vat_rate: 15,
   });
   const [routes, setRoutes] = useState<Route[]>([]);
+  const [routeSearch, setRouteSearch] = useState("");
   const [staff, setStaff] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(false);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
@@ -41,13 +42,16 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+  const getRouteLabel = (route: Route) =>
+    `${route.from_place_full || route.name} -> ${route.to_place_full || ""}${route.route_value ? ` | ${route.route_value}` : ""}`;
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const routesRes = await FrappeClient.getList('Route', {}, ['name', 'from_place_full', 'to_place_full', 'distance', 'duration_minutes', 'return_route']);
+        const routesRes = await FrappeClient.getList('Route', {}, ['name', 'from_place_full', 'to_place_full', 'distance', 'duration_minutes', 'return_route', 'route_value']);
         const staffRes = await FrappeClient.getList('Staff', {}, ['name', 'vehicle_assigned']);
-        setRoutes(routesRes.message || []);
+        const nextRoutes = routesRes.message || [];
+        setRoutes(nextRoutes);
         setStaff(staffRes.message || []);
 
         if (trip?.name && !formData.passengers?.length) {
@@ -59,6 +63,8 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
               vat_rate: 15,
               ...nextTrip,
             });
+            const selectedRoute = nextRoutes.find((r: Route) => r.name === nextTrip.trip_route);
+            if (selectedRoute) setRouteSearch(getRouteLabel(selectedRoute));
             if (nextTrip.trip_invoice) {
               const invoice = await FrappeClient.getTripInvoice(nextTrip.trip_invoice);
               setTripInvoice(invoice);
@@ -118,10 +124,18 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
             distance: route.distance,
             duration_minutes: route.duration_minutes,
             from_location: route.from_place_full,
-            to_location: route.to_place_full
+            to_location: route.to_place_full,
+            trip_value: route.route_value || prev.trip_value
         }));
+        setRouteSearch(getRouteLabel(route));
         setIsDirty(true);
     }
+  };
+
+  const handleRouteSearchChange = (value: string) => {
+    setRouteSearch(value);
+    const route = routes.find(r => getRouteLabel(r) === value || r.name === value);
+    if (route) handleRouteUpdate(route.name);
   };
 
   const handleDriverUpdate = (driverName: string) => {
@@ -167,6 +181,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
         reverseData.trip_route = matchingRoute.name;
         reverseData.distance = matchingRoute.distance;
         reverseData.duration_minutes = matchingRoute.duration_minutes;
+        reverseData.trip_value = matchingRoute.route_value || formData.trip_value;
     } else {
         reverseData.trip_route = ""; 
     }
@@ -340,7 +355,22 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
 
   const openTripInvoice = () => {
     if (!formData.trip_invoice) return;
-    window.open(`/app/trip-invoice/${encodeURIComponent(formData.trip_invoice)}`, "_blank");
+    window.open(FrappeClient.getDeskUrl('Trip Invoice', formData.trip_invoice), "_blank");
+  };
+
+  const markTripInvoiceReady = async () => {
+    if (!formData.trip_invoice) return;
+    setInvoiceLoading(true);
+    try {
+      const result = await FrappeClient.markTripInvoiceReady(formData.trip_invoice);
+      const invoice = await FrappeClient.getTripInvoice(formData.trip_invoice);
+      setTripInvoice({ ...invoice, ...result });
+      showToast("Trip Invoice is ready for Kashf.", "success");
+    } catch (err: any) {
+      showToast(err.message || "Error", "error");
+    } finally {
+      setInvoiceLoading(false);
+    }
   };
 
   const createTripInvoice = async () => {
@@ -477,6 +507,29 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                         <span className="text-[10px] font-black uppercase tracking-widest">Open Trip Invoice</span>
                     </button>
                 )}
+                {formData.trip_invoice && tripInvoice?.status !== "Ready" && !tripInvoice?.kashf_ready && (
+                    <button
+                        onClick={markTripInvoiceReady}
+                        disabled={invoiceLoading}
+                        className="bg-white text-slate-700 py-4 rounded-[1.5rem] border border-slate-100 flex items-center justify-center gap-2.5 active:scale-[0.98] transition-all shadow-sm group disabled:opacity-40"
+                    >
+                        <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"/></svg>
+                        </div>
+                        <span className="text-[10px] font-black uppercase tracking-widest">Mark Ready</span>
+                    </button>
+                )}
+                {formData.trip_invoice && canPrintKashf(tripInvoice) && (
+                    <button
+                        onClick={handlePrint}
+                        className="bg-white text-slate-700 py-4 rounded-[1.5rem] border border-slate-100 flex items-center justify-center gap-2.5 active:scale-[0.98] transition-all shadow-sm group"
+                    >
+                        <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2z"/></svg>
+                        </div>
+                        <span className="text-[10px] font-black uppercase tracking-widest">Print Kashf</span>
+                    </button>
+                )}
             </div>
         )}
 
@@ -543,10 +596,16 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                     </div>
                     <div className="space-y-2">
                         <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-widest">{t.routeSelection}</label>
-                        <select className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-100 transition-all appearance-none" value={formData.trip_route || ''} onChange={(e) => handleRouteUpdate(e.target.value)}>
-                            <option value="">{t.selectRoute}</option>
-                            {routes.map(r => <option key={r.name} value={r.name}>{r.from_place_full} → {r.to_place_full}</option>)}
-                        </select>
+                        <input
+                            list="trip-route-options"
+                            className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-100 transition-all"
+                            value={routeSearch}
+                            placeholder="Search route"
+                            onChange={(e) => handleRouteSearchChange(e.target.value)}
+                        />
+                        <datalist id="trip-route-options">
+                            {routes.map(r => <option key={r.name} value={getRouteLabel(r)} />)}
+                        </datalist>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">

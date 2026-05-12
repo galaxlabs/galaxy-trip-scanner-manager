@@ -70,6 +70,7 @@ export interface Route {
   from_place_full: string;
   to_place_full: string;
   distance: number;
+  route_value?: number;
   duration_minutes: number;
   return_route?: string;
 }
