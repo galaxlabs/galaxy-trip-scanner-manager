@@ -195,8 +195,8 @@ export class FrappeClient {
   return res.message;
 }
 
-  static async createTripInvoiceFromTrip(tripName: string) {
-    const res = await this.fetch(CREATE_TRIP_INVOICE_METHOD, { trip_name: tripName }, { method: "POST" });
+  static async createTripInvoiceFromTrip(tripName: string, invoiceMode: "Trip" | "Passenger" = "Trip") {
+    const res = await this.fetch(CREATE_TRIP_INVOICE_METHOD, { trip_name: tripName, invoice_mode: invoiceMode }, { method: "POST" });
     return res.message;
   }
 

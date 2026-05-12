@@ -97,10 +97,10 @@ export class FrappeClient {
     return res.message;
   }
 
-  static async createTripInvoiceFromTrip(tripName: string) {
+  static async createTripInvoiceFromTrip(tripName: string, invoiceMode: "Trip" | "Passenger" = "Trip") {
     const res = await this.fetch(
       "tms.transport_management_system.doctype.trip_invoice.trip_invoice.create_trip_invoice_from_trip",
-      { trip_name: tripName },
+      { trip_name: tripName, invoice_mode: invoiceMode },
       { method: "POST" }
     );
     return res.message;
