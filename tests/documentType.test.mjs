@@ -54,6 +54,15 @@ test("keeps only the passenger fields we want to store in Frappe", () => {
       passenger_name: "John Doe",
       document_number: "P12345",
       nationality: "PK",
+      passenger_master: undefined,
+      document_type: "Visa",
+      contact_no: "123",
+      source: "OCR",
+      expiry_date: "21/02/2036",
+      is_auto_filled: 1,
+      is_invoice_customer: 0,
+      customer: undefined,
+      notes: undefined,
     }
   );
 });

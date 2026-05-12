@@ -157,7 +157,8 @@ function buildPassengerRequest({ base64Data, mimeType, model }) {
           {
             text:
               "Extract only the core passenger details from this document. Provide JSON array. " +
-              "Return only: name, passport, nationality.",
+              "Support Passport, Aqama, Nusuk, Visa, and similar papers. " +
+              "Return only: name, passport, nationality, document_type, contact_no, expiry_date.",
           },
         ],
       },
@@ -172,6 +173,9 @@ function buildPassengerRequest({ base64Data, mimeType, model }) {
             name: { type: Type.STRING },
             passport: { type: Type.STRING },
             nationality: { type: Type.STRING },
+            document_type: { type: Type.STRING },
+            contact_no: { type: Type.STRING },
+            expiry_date: { type: Type.STRING },
           },
           required: ["name", "passport", "nationality"],
         },
@@ -229,7 +233,8 @@ function buildAutoRequest({ base64Data, mimeType, model }) {
             text:
               "Extract BOTH passenger details and trip/vehicle info from this document.\n" +
               "Return JSON with keys: passengers (array) and trip (object).\n" +
-              "For each passenger, return only: name, passport, nationality.",
+              "For each passenger, support Passport, Aqama, Nusuk, Visa, and similar papers. " +
+              "Return only: name, passport, nationality, document_type, contact_no, expiry_date.",
           },
         ],
       },
@@ -247,6 +252,9 @@ function buildAutoRequest({ base64Data, mimeType, model }) {
                 name: { type: Type.STRING },
                 passport: { type: Type.STRING },
                 nationality: { type: Type.STRING },
+                document_type: { type: Type.STRING },
+                contact_no: { type: Type.STRING },
+                expiry_date: { type: Type.STRING },
               },
               required: ["name", "passport", "nationality"],
             },
