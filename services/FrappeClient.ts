@@ -92,9 +92,26 @@ export class FrappeClient {
     // For save/insert, you can decide doc has name or not
     const isNew = !doc?.name;
     const method = isNew ? "frappe.client.insert" : "frappe.client.save";
-    const payload = { doc: JSON.stringify({ ...doc, doctype }) };
-    const res = await this.fetch(method, payload, { method: "POST" });
-    return res.message;
+    const saveOnce = async () => {
+      let docToSave = { ...doc, doctype };
+      if (!isNew && doc?.name) {
+        const latest = (await this.getDoc(doctype, doc.name)).message || {};
+        docToSave = { ...latest, ...doc, doctype };
+      }
+      const payload = { doc: JSON.stringify(docToSave) };
+      const res = await this.fetch(method, payload, { method: "POST" });
+      return res.message;
+    };
+
+    try {
+      return await saveOnce();
+    } catch (err: any) {
+      const message = String(err?.message || err || "");
+      if (!isNew && (message.includes("TimestampMismatchError") || message.includes("Document has been modified"))) {
+        return await saveOnce();
+      }
+      throw err;
+    }
   }
 
   static async createTripInvoiceFromTrip(tripName: string, invoiceMode: "Trip" | "Passenger" = "Trip") {

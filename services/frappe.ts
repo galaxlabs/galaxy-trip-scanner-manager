@@ -16,6 +16,11 @@ export function canPrintKashf(tripInvoice?: TripInvoice | null): boolean {
   return Boolean(tripInvoice?.kashf_ready && tripInvoice.status !== "Cancelled");
 }
 
+function isTimestampMismatch(error: unknown): boolean {
+  const message = String((error as any)?.message || error || "");
+  return message.includes("TimestampMismatchError") || message.includes("Document has been modified");
+}
+
 export class FrappeClient {
   static async fetch(method: string, params: any = {}, options: RequestInit = {}) {
   const reqMethod = (options.method || "GET").toUpperCase();
@@ -187,12 +192,28 @@ export class FrappeClient {
     }).filter(Boolean);
   }
 
-  // 4) choose correct method
-  const method = isNew ? "frappe.client.insert" : "frappe.client.save";
+  const saveOnce = async () => {
+    const method = isNew ? "frappe.client.insert" : "frappe.client.save";
+    let docToSave = { ...clean, doctype };
 
-  const payload = { doc: JSON.stringify({ ...clean, doctype }) };
-  const res = await this.fetch(method, payload, { method: "POST" });
-  return res.message;
+    if (!isNew && clean.name) {
+      const latest = (await this.getDoc(doctype, clean.name)).message || {};
+      docToSave = { ...latest, ...clean, doctype };
+    }
+
+    const payload = { doc: JSON.stringify(docToSave) };
+    const res = await this.fetch(method, payload, { method: "POST" });
+    return res.message;
+  };
+
+  try {
+    return await saveOnce();
+  } catch (err) {
+    if (!isNew && isTimestampMismatch(err)) {
+      return await saveOnce();
+    }
+    throw err;
+  }
 }
 
   static async createTripInvoiceFromTrip(tripName: string, invoiceMode: "Trip" | "Passenger" = "Trip") {
