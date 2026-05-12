@@ -16,7 +16,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) 
   const [tripInvoiceStatus, setTripInvoiceStatus] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
-  const [creatingInvoiceFor, setCreatingInvoiceFor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const t = translations[lang];
   const fontClass = lang === 'ar' ? 'font-ar' : lang === 'ur' ? 'font-ur' : '';
@@ -124,46 +123,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) 
     }
   };
 
-  const handleOpenTripInvoice = (e: React.MouseEvent, trip: Trip) => {
-    e.stopPropagation();
-    setActiveMenu(null);
-    if (trip.trip_invoice) {
-      window.open(FrappeClient.getDeskUrl('Trip Invoice', trip.trip_invoice), '_blank');
-    }
-  };
-
-  const handleCreateTripInvoice = async (e: React.MouseEvent, trip: Trip) => {
-    e.stopPropagation();
-    if (!trip.name) return;
-    if (trip.trip_invoice || isFrappeCheckEnabled(trip.trip_invoice_created)) {
-      setError("Trip Invoice already exists.");
-      setActiveMenu(null);
-      return;
-    }
-    if (Number(trip.trip_value || 0) <= 0) {
-      setError("Trip Value is required before creating Trip Invoice.");
-      setActiveMenu(null);
-      return;
-    }
-    if (trip.billing_mode === "KM Based" && Number(trip.distance || 0) <= 0) {
-      setError("Distance is required for KM Based billing.");
-      setActiveMenu(null);
-      return;
-    }
-
-    setCreatingInvoiceFor(trip.name);
-    setError(null);
-    try {
-      await FrappeClient.createTripInvoiceFromTrip(trip.name);
-      setActiveMenu(null);
-      await fetchData();
-    } catch (err: any) {
-      setError(err.message || "Failed to create Trip Invoice");
-    } finally {
-      setCreatingInvoiceFor(null);
-    }
-  };
-
   const getInvoiceStatusLabel = (trip: Trip) =>
     trip.trip_invoice ? (tripInvoiceStatus[trip.trip_invoice] || "Trip Invoice Draft") : "No Trip Invoice";
 
@@ -229,22 +188,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) 
                                 </div>
                                 {t.returnTrip}
                             </button>
-                            {!trip.trip_invoice && !isFrappeCheckEnabled(trip.trip_invoice_created) && (
-                            <button onClick={(e) => handleCreateTripInvoice(e, trip)} disabled={creatingInvoiceFor === trip.name} className="w-full text-left rtl:text-right px-6 py-4 text-[10px] font-black text-slate-600 hover:bg-slate-50 flex items-center gap-3 border-t border-slate-50 uppercase transition-colors disabled:opacity-40">
-                                <div className="w-8 h-8 rounded-xl bg-violet-50 flex items-center justify-center text-violet-600">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12h6m-6 4h6M5 4h14v16H5z"/></svg>
-                                </div>
-                                {creatingInvoiceFor === trip.name ? "Creating..." : "Create Trip Invoice"}
-                            </button>
-                            )}
-                            {trip.trip_invoice && (
-                            <button onClick={(e) => handleOpenTripInvoice(e, trip)} className="w-full text-left rtl:text-right px-6 py-4 text-[10px] font-black text-slate-600 hover:bg-slate-50 flex items-center gap-3 border-t border-slate-50 uppercase transition-colors">
-                                <div className="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 7h4m0 0v4m0-4L7 17"/></svg>
-                                </div>
-                                Trip Invoice
-                            </button>
-                            )}
                         </div>
                     )}
                   </div>

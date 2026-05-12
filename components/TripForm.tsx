@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Trip, Route, Staff, Passenger, Language, TripInvoice } from '../types';
-import { FrappeClient, canPrintKashf, isFrappeCheckEnabled } from '../services/frappe';
+import { FrappeClient, isFrappeCheckEnabled } from '../services/frappe';
 import { extractDocumentInfo } from '../services/geminiService';
 import { translations } from '../translations';
+import TripInvoiceForm from './TripInvoiceForm';
 
 interface TripFormProps {
   trip?: Trip | null;
@@ -33,6 +34,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
   const [loading, setLoading] = useState(false);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [tripInvoice, setTripInvoice] = useState<TripInvoice | null>(null);
+  const [showTripInvoiceForm, setShowTripInvoiceForm] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [queue, setQueue] = useState<ScanQueue>({ total: 0, processed: 0, scanning: false });
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | null }>({ message: '', type: null });
@@ -264,8 +266,13 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                 if (extractedPassengers && extractedPassengers.length > 0) {
                     const newPassengers: Passenger[] = extractedPassengers.map(p => ({
                         passenger_name: p.name,
-                        id_no: p.id_no || p.passport,
-                        mobile_no: p.mobile_no || p.phone || p.mobile,
+                        document_number: p.passport,
+                        nationality: p.nationality,
+                        document_type: p.document_type || "Passport",
+                        contact_no: p.contact_no,
+                        expiry_date: p.expiry_date,
+                        source: "OCR",
+                        is_auto_filled: 1,
                     }));
                     setFormData(prev => ({
                         ...prev,
@@ -352,39 +359,14 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
   };
 
   const handlePrint = () => {
-    if (!tripInvoice?.name || !canPrintKashf(tripInvoice)) return;
-    window.open(FrappeClient.getPrintUrl('Trip Invoice', tripInvoice.name, 'Kashf'), '_blank');
-  };
-
-  const printTripSheet = () => {
-    if (!formData.name) return showToast(t.savePrintErr, "error");
-    window.open(FrappeClient.getPrintUrl('Trip', formData.name, 'Trip'), '_blank');
-  };
-
-  const printTripInvoice = () => {
     if (!tripInvoice?.name) return;
     window.open(FrappeClient.getPrintUrl('Trip Invoice', tripInvoice.name, 'Trip Invoice POS'), '_blank');
   };
 
-  const openTripInvoice = () => {
-    if (!formData.trip_invoice) return;
-    window.open(FrappeClient.getDeskUrl('Trip Invoice', formData.trip_invoice), "_blank");
-  };
-
-  const markTripInvoiceReady = async () => {
-    if (!formData.trip_invoice) return;
-    setInvoiceLoading(true);
-    try {
-      const result = await FrappeClient.markTripInvoiceReady(formData.trip_invoice);
-      const invoice = await FrappeClient.getTripInvoice(formData.trip_invoice);
-      setTripInvoice({ ...invoice, ...result });
-      setFormData(prev => ({ ...prev, trip_invoice_created: 1, trip_invoice: formData.trip_invoice }));
-      showToast("Trip Invoice is ready for Kashf.", "success");
-    } catch (err: any) {
-      showToast(err.message || "Error", "error");
-    } finally {
-      setInvoiceLoading(false);
-    }
+  const printTripSheet = () => {
+    if (!formData.name) return showToast(t.savePrintErr, "error");
+    if (!hasTripInvoice) return showToast("Create Trip Invoice before printing Trip.", "error");
+    window.open(FrappeClient.getPrintUrl('Trip', formData.name, 'Trip'), '_blank');
   };
 
   const createTripInvoice = async () => {
@@ -430,6 +412,22 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
     if (cameraInputRef.current) cameraInputRef.current.click();
   };
 
+  if (showTripInvoiceForm && formData.trip_invoice) {
+    return (
+      <TripInvoiceForm
+        invoiceName={formData.trip_invoice}
+        lang={lang}
+        onBack={async () => {
+          setShowTripInvoiceForm(false);
+          if (formData.trip_invoice) {
+            const invoice = await FrappeClient.getTripInvoice(formData.trip_invoice);
+            setTripInvoice(invoice);
+          }
+        }}
+      />
+    );
+  }
+
   return (
     <div className="flex flex-col h-full bg-slate-50 pb-28 relative">
       {/* Toast Notification */}
@@ -466,11 +464,6 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
             </p>
         </div>
         <div className="flex items-center gap-1.5">
-            {formData.name && canPrintKashf(tripInvoice) && (
-                <button onClick={handlePrint} className="w-10 h-10 flex items-center justify-center text-indigo-600 bg-indigo-50 rounded-2xl active:scale-90 transition-all">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
-                </button>
-            )}
             <button disabled={loading} onClick={saveTrip} className={`px-5 py-2.5 rounded-2xl font-black text-[10px] uppercase shadow-lg transition-all active:scale-95 ${isDirty ? 'bg-blue-600 text-white shadow-blue-200' : 'bg-slate-900 text-white shadow-slate-200'}`}>
                 {loading ? t.syncing : t.save}
             </button>
@@ -481,15 +474,17 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
         {/* Record Quick Actions */}
         {formData.name && (
             <div className="grid grid-cols-2 gap-4">
-                <button
-                    onClick={printTripSheet}
-                    className="bg-white text-slate-700 py-4 rounded-[1.5rem] border border-slate-100 flex items-center justify-center gap-2.5 active:scale-[0.98] transition-all shadow-sm group"
-                >
-                    <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2z"/></svg>
-                    </div>
-                    <span className="text-[10px] font-black uppercase tracking-widest">Print Trip</span>
-                </button>
+                {hasTripInvoice && (
+                    <button
+                        onClick={printTripSheet}
+                        className="bg-white text-slate-700 py-4 rounded-[1.5rem] border border-slate-100 flex items-center justify-center gap-2.5 active:scale-[0.98] transition-all shadow-sm group"
+                    >
+                        <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2z"/></svg>
+                        </div>
+                        <span className="text-[10px] font-black uppercase tracking-widest">Print Trip</span>
+                    </button>
+                )}
                 <button 
                     onClick={() => setConfirmModal({ title: t.duplicateTrip, desc: t.duplicateDesc, action: execDuplicate })}
                     className="bg-white text-slate-700 py-4 rounded-[1.5rem] border border-slate-100 flex items-center justify-center gap-2.5 active:scale-[0.98] transition-all shadow-sm group"
@@ -522,39 +517,16 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                 )}
                 {hasTripInvoice && (
                     <button
-                        onClick={openTripInvoice}
+                        onClick={() => setShowTripInvoiceForm(true)}
                         className="bg-white text-slate-700 py-4 rounded-[1.5rem] border border-slate-100 flex items-center justify-center gap-2.5 active:scale-[0.98] transition-all shadow-sm group"
                     >
                         <div className="w-8 h-8 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center group-hover:scale-110 transition-transform">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M13 7h4m0 0v4m0-4L7 17"/></svg>
                         </div>
-                        <span className="text-[10px] font-black uppercase tracking-widest">Open Trip Invoice</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest">Trip Invoice</span>
                     </button>
                 )}
                 {hasTripInvoice && tripInvoice?.name && (
-                    <button
-                        onClick={printTripInvoice}
-                        className="bg-white text-slate-700 py-4 rounded-[1.5rem] border border-slate-100 flex items-center justify-center gap-2.5 active:scale-[0.98] transition-all shadow-sm group"
-                    >
-                        <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M9 12h6m-6 4h6M5 4h14v16H5z"/></svg>
-                        </div>
-                        <span className="text-[10px] font-black uppercase tracking-widest">Print Invoice</span>
-                    </button>
-                )}
-                {hasTripInvoice && tripInvoice?.status !== "Ready" && !isFrappeCheckEnabled(tripInvoice?.kashf_ready) && (
-                    <button
-                        onClick={markTripInvoiceReady}
-                        disabled={invoiceLoading}
-                        className="bg-white text-slate-700 py-4 rounded-[1.5rem] border border-slate-100 flex items-center justify-center gap-2.5 active:scale-[0.98] transition-all shadow-sm group disabled:opacity-40"
-                    >
-                        <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"/></svg>
-                        </div>
-                        <span className="text-[10px] font-black uppercase tracking-widest">Mark Ready</span>
-                    </button>
-                )}
-                {hasTripInvoice && canPrintKashf(tripInvoice) && (
                     <button
                         onClick={handlePrint}
                         className="bg-white text-slate-700 py-4 rounded-[1.5rem] border border-slate-100 flex items-center justify-center gap-2.5 active:scale-[0.98] transition-all shadow-sm group"
@@ -562,7 +534,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                         <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-110 transition-transform">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2z"/></svg>
                         </div>
-                        <span className="text-[10px] font-black uppercase tracking-widest">Print Kashf</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest">Print Invoice</span>
                     </button>
                 )}
             </div>
@@ -576,8 +548,8 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                         <h3 className="text-sm font-black text-slate-900 uppercase tracking-tighter">Trip Invoice</h3>
                         <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-1">{tripInvoice.name}</p>
                     </div>
-                    <span className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase ${canPrintKashf(tripInvoice) ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                        {canPrintKashf(tripInvoice) ? 'Ready' : (tripInvoice.status || 'Draft')}
+                    <span className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase ${tripInvoice.status === "Ready" ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {tripInvoice.status || 'Draft'}
                     </span>
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-[10px] font-bold text-slate-600">
@@ -600,15 +572,6 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                             <p className="font-black text-slate-900">{item.total_amount ?? 0}</p>
                         </div>
                     ))}
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                    <button onClick={printTripInvoice} className="bg-blue-600 text-white py-3 rounded-2xl text-[10px] font-black uppercase">Invoice</button>
-                    {!canPrintKashf(tripInvoice) ? (
-                        <button onClick={markTripInvoiceReady} disabled={invoiceLoading} className="bg-emerald-600 text-white py-3 rounded-2xl text-[10px] font-black uppercase disabled:opacity-40">Ready</button>
-                    ) : (
-                        <button onClick={handlePrint} className="bg-indigo-600 text-white py-3 rounded-2xl text-[10px] font-black uppercase">Kashf</button>
-                    )}
-                    <button onClick={openTripInvoice} className="bg-slate-900 text-white py-3 rounded-2xl text-[10px] font-black uppercase">Desk</button>
                 </div>
             </section>
         )}
@@ -733,7 +696,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                         <div className="w-1.5 h-4 bg-emerald-500 rounded-full"></div>
                         <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">{t.manifest} ({formData.passengers?.length || 0})</h4>
                     </div>
-                    <button onClick={() => { setFormData(prev => ({ ...prev, passengers: [...(prev.passengers || []), { passenger_name: '', id_no: '', mobile_no: '' }] })); setIsDirty(true); }} className="text-[9px] font-black text-blue-600 bg-blue-50 px-3.5 py-2 rounded-xl uppercase active:scale-95 transition-all">
+                    <button onClick={() => { setFormData(prev => ({ ...prev, passengers: [...(prev.passengers || []), { passenger_name: '', document_number: '', contact_no: '', source: 'MANUAL' }] })); setIsDirty(true); }} className="text-[9px] font-black text-blue-600 bg-blue-50 px-3.5 py-2 rounded-xl uppercase active:scale-95 transition-all">
                         + {t.addRecord}
                     </button>
                 </div>
@@ -756,11 +719,27 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                                     <div className="grid grid-cols-2 gap-6 pt-3 border-t border-slate-100">
                                         <div className="space-y-1">
                                             <label className="text-[8px] font-black text-slate-300 uppercase tracking-widest ml-1">{t.idPassport}</label>
-                                            <input className="w-full bg-transparent text-[11px] font-bold text-slate-600 outline-none uppercase" placeholder="---" value={p.id_no || p.document_number || ''} onChange={(e) => { const next = [...(formData.passengers || [])]; next[idx].id_no = e.target.value; setFormData({...formData, passengers: next}); setIsDirty(true); }} />
+                                            <input className="w-full bg-transparent text-[11px] font-bold text-slate-600 outline-none uppercase" placeholder="---" value={p.document_number || p.id_no || ''} onChange={(e) => { const next = [...(formData.passengers || [])]; next[idx].document_number = e.target.value; setFormData({...formData, passengers: next}); setIsDirty(true); }} />
                                         </div>
                                         <div className="space-y-1">
                                             <label className="text-[8px] font-black text-slate-300 uppercase tracking-widest ml-1">Mobile</label>
-                                            <input className="w-full bg-transparent text-[11px] font-bold text-slate-600 outline-none uppercase" placeholder="---" value={p.mobile_no || p.contact_no || ''} onChange={(e) => { const next = [...(formData.passengers || [])]; next[idx].mobile_no = e.target.value; setFormData({...formData, passengers: next}); setIsDirty(true); }} />
+                                            <input className="w-full bg-transparent text-[11px] font-bold text-slate-600 outline-none uppercase" placeholder="---" value={p.contact_no || p.mobile_no || ''} onChange={(e) => { const next = [...(formData.passengers || [])]; next[idx].contact_no = e.target.value; setFormData({...formData, passengers: next}); setIsDirty(true); }} />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-6">
+                                        <div className="space-y-1">
+                                            <label className="text-[8px] font-black text-slate-300 uppercase tracking-widest ml-1">Nationality</label>
+                                            <input className="w-full bg-transparent text-[11px] font-bold text-slate-600 outline-none uppercase" placeholder="---" value={p.nationality || ''} onChange={(e) => { const next = [...(formData.passengers || [])]; next[idx].nationality = e.target.value; setFormData({...formData, passengers: next}); setIsDirty(true); }} />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[8px] font-black text-slate-300 uppercase tracking-widest ml-1">Document Type</label>
+                                            <select className="w-full bg-transparent text-[11px] font-bold text-slate-600 outline-none uppercase" value={p.document_type || 'Passport'} onChange={(e) => { const next = [...(formData.passengers || [])]; next[idx].document_type = e.target.value; setFormData({...formData, passengers: next}); setIsDirty(true); }}>
+                                                <option value="Passport">Passport</option>
+                                                <option value="Aqama">Aqama</option>
+                                                <option value="Nusuk">Nusuk</option>
+                                                <option value="Visa">Visa</option>
+                                                <option value="Other">Other</option>
+                                            </select>
                                         </div>
                                     </div>
                                     <label className="flex items-center gap-3 pt-3 border-t border-slate-100 text-[9px] font-black text-slate-500 uppercase tracking-widest">

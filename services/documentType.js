@@ -96,16 +96,27 @@ function cleanText(value) {
 }
 
 export function sanitizePassengerPayload(row) {
+  const isAutoFilled =
+    row?.is_auto_filled === true ||
+    row?.is_auto_filled === 1 ||
+    row?.is_auto_filled === "1";
+
   const sanitized = {
     passenger_name: cleanText(row?.passenger_name),
-    mobile_no: cleanText(row?.mobile_no || row?.contact_no),
-    id_no: cleanText(row?.id_no || row?.document_number),
+    nationality: cleanText(row?.nationality),
+    passenger_master: cleanText(row?.passenger_master),
+    document_type: normalizePassengerDocumentType(row?.document_type),
+    document_number: cleanText(row?.document_number || row?.id_no || row?.passport),
+    contact_no: cleanText(row?.contact_no || row?.mobile_no || row?.phone || row?.mobile),
+    source: normalizePassengerSource(row?.source, { isAutoFilled }),
+    expiry_date: cleanText(row?.expiry_date),
+    is_auto_filled: isAutoFilled ? 1 : 0,
     is_invoice_customer: row?.is_invoice_customer ? 1 : 0,
     customer: cleanText(row?.customer),
     notes: cleanText(row?.notes),
   };
 
-  if (!sanitized.passenger_name && !sanitized.mobile_no && !sanitized.id_no) {
+  if (!sanitized.passenger_name && !sanitized.contact_no && !sanitized.document_number && !sanitized.nationality) {
     return null;
   }
 

@@ -6,6 +6,9 @@ export interface ExtractedPassenger {
   name: string;
   passport: string;
   nationality: string;
+  document_type?: string;
+  contact_no?: string;
+  expiry_date?: string;
 }
 
 function normalizeExtractedPassenger(input: any): ExtractedPassenger | null {
@@ -33,10 +36,33 @@ function normalizeExtractedPassenger(input: any): ExtractedPassenger | null {
     input.nationalityCode ??
     "";
 
+  const documentType =
+    input.document_type ??
+    input.documentType ??
+    input.type ??
+    "";
+
+  const contactNo =
+    input.contact_no ??
+    input.contactNo ??
+    input.mobile_no ??
+    input.mobile ??
+    input.phone ??
+    "";
+
+  const expiryDate =
+    input.expiry_date ??
+    input.expiryDate ??
+    input.expiry ??
+    "";
+
   const normalized: ExtractedPassenger = {
     name: String(name || ""),
     passport: String(passport || ""),
     nationality: String(nationality || ""),
+    document_type: String(documentType || ""),
+    contact_no: String(contactNo || ""),
+    expiry_date: String(expiryDate || ""),
   };
 
   // If we don't have the minimum fields, treat as unusable.

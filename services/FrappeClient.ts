@@ -146,13 +146,6 @@ export class FrappeClient {
     return res.message;
   }
 
-  static getDeskUrl(doctype: string, name: string) {
-    const envUrl = (import.meta as any)?.env?.VITE_FRAPPE_BASE_URL;
-    const baseUrl = String(envUrl || "https://tms.galaxylabs.online").replace(/\/$/, "");
-    const slug = doctype.trim().toLowerCase().replace(/\s+/g, "-");
-    return `${baseUrl}/app/${slug}/${encodeURIComponent(name)}`;
-  }
-
   static getPrintUrl(doctype: string, name: string, format?: string) {
     const fmt = format || doctype;
     const url = new URL("/api/print", window.location.origin);

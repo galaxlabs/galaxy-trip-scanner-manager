@@ -11,19 +11,8 @@ const MARK_TRIP_INVOICE_READY_METHOD =
   "tms.transport_management_system.doctype.trip_invoice.trip_invoice.mark_trip_invoice_ready";
 const MARK_KASHF_SENT_METHOD =
   "tms.transport_management_system.doctype.trip_invoice.trip_invoice.mark_kashf_sent";
-const DEFAULT_FRAPPE_BASE_URL = "https://tms.galaxylabs.online";
-
-export function canPrintKashf(tripInvoice?: TripInvoice | null): boolean {
-  return isFrappeCheckEnabled(tripInvoice?.kashf_ready) && tripInvoice?.status !== "Cancelled";
-}
-
 export function isFrappeCheckEnabled(value: unknown): boolean {
   return value === true || value === 1 || value === "1";
-}
-
-function getFrappeBaseUrl(): string {
-  const envUrl = (import.meta as any)?.env?.VITE_FRAPPE_BASE_URL;
-  return String(envUrl || DEFAULT_FRAPPE_BASE_URL).replace(/\/$/, "");
 }
 
 function isTimestampMismatch(error: unknown): boolean {
@@ -246,10 +235,6 @@ export class FrappeClient {
     return res.message;
   }
 
-  static getDeskUrl(doctype: string, name: string) {
-    return `${getFrappeBaseUrl()}/app/${frappeSlug(doctype)}/${encodeURIComponent(name)}`;
-  }
-
   static getPrintUrl(doctype: string, name: string, format?: string) {
     const fmt = format || doctype;
     const url = new URL("/api/print", window.location.origin);
@@ -259,8 +244,4 @@ export class FrappeClient {
     url.searchParams.set("no_letterhead", "0");
     return url.toString();
   }
-}
-
-function frappeSlug(doctype: string): string {
-  return doctype.trim().toLowerCase().replace(/\s+/g, "-");
 }
