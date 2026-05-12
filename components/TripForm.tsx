@@ -43,12 +43,17 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
   const t = translations[lang];
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const formDataRef = useRef<Trip>(formData);
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
   const getRouteLabel = (route: Route) =>
     `${route.from_place_full || route.name} -> ${route.to_place_full || ""}${route.route_value ? ` | ${route.route_value}` : ""}`;
   const hasTripInvoice = Boolean(formData.trip_invoice);
   const tripInvoiceAlreadyCreated = isFrappeCheckEnabled(formData.trip_invoice_created) || hasTripInvoice;
   const hasTripValue = Number(formData.trip_value || 0) > 0;
+
+  useEffect(() => {
+    formDataRef.current = formData;
+  }, [formData]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -278,10 +283,15 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                         ...prev,
                         passengers: mergeUniquePassengers(prev.passengers || [], newPassengers)
                     }));
+                    formDataRef.current = {
+                        ...formDataRef.current,
+                        passengers: mergeUniquePassengers(formDataRef.current.passengers || [], newPassengers)
+                    };
                     setIsDirty(true);
                 } else {
                     if (extractedTrip && Object.keys(extractedTrip).length > 0) {
                         setFormData(prev => ({ ...prev, ...extractedTrip }));
+                        formDataRef.current = { ...formDataRef.current, ...extractedTrip };
                         setIsDirty(true);
                     }
                 }
@@ -326,6 +336,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
     setQueue(q => ({ ...q, scanning: false }));
     if (fileInputRef.current) fileInputRef.current.value = '';
     if (cameraInputRef.current) cameraInputRef.current.value = '';
+    await autoSaveTripAfterScan();
     
     if (failures > 0) {
         showToast(
@@ -358,6 +369,25 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
     }
   };
 
+  const autoSaveTripAfterScan = async () => {
+    const nextTrip = formDataRef.current;
+    if (!nextTrip.name || !nextTrip.driver || !nextTrip.trip_route) return;
+
+    try {
+      const savedDoc = await FrappeClient.saveDoc('Trip', {
+        billing_mode: "Route Amount",
+        vat_mode: "Included",
+        vat_rate: 15,
+        ...nextTrip,
+      });
+      setFormData(savedDoc);
+      setIsDirty(false);
+    } catch (err) {
+      console.error("Auto-save after OCR failed", err);
+      setIsDirty(true);
+    }
+  };
+
   const handlePrint = () => {
     if (!tripInvoice?.name) return;
     window.open(FrappeClient.getPrintUrl('Trip Invoice', tripInvoice.name, 'Trip Invoice POS'), '_blank');
@@ -385,17 +415,19 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
     try {
       const result = await FrappeClient.createTripInvoiceFromTrip(formData.name);
       const invoice = result.trip_invoice ? await FrappeClient.getTripInvoice(result.trip_invoice) : null;
+      const nextInvoice = invoice || {
+        name: result.trip_invoice,
+        trip: result.trip,
+        status: result.status,
+        kashf_ready: result.kashf_ready,
+      };
       setFormData(prev => ({
         ...prev,
         trip_invoice_created: 1,
         trip_invoice: result.trip_invoice,
       }));
-      setTripInvoice(invoice || {
-        name: result.trip_invoice,
-        trip: result.trip,
-        status: result.status,
-        kashf_ready: result.kashf_ready,
-      });
+      setTripInvoice(nextInvoice);
+      setShowTripInvoiceForm(true);
       showToast(`Trip Invoice created: ${result.trip_invoice}`, "success");
     } catch (err: any) {
       showToast(err.message || "Error", "error");
