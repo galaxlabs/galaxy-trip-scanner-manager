@@ -98,11 +98,14 @@ function cleanText(value) {
 export function sanitizePassengerPayload(row) {
   const sanitized = {
     passenger_name: cleanText(row?.passenger_name),
-    document_number: cleanText(row?.document_number),
-    nationality: cleanText(row?.nationality),
+    mobile_no: cleanText(row?.mobile_no || row?.contact_no),
+    id_no: cleanText(row?.id_no || row?.document_number),
+    is_invoice_customer: row?.is_invoice_customer ? 1 : 0,
+    customer: cleanText(row?.customer),
+    notes: cleanText(row?.notes),
   };
 
-  if (!sanitized.passenger_name && !sanitized.document_number && !sanitized.nationality) {
+  if (!sanitized.passenger_name && !sanitized.mobile_no && !sanitized.id_no) {
     return null;
   }
 

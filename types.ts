@@ -27,6 +27,14 @@ export interface Trip {
   from_location?: string;
   to_location?: string;
   distance?: number;
+  trip_value?: number;
+  trip_invoice_created?: boolean | number;
+  trip_invoice?: string;
+  invoice_passenger_name?: string;
+  invoice_passenger_mobile?: string;
+  billing_mode?: "Route Amount" | "KM Based" | "Manual";
+  vat_mode?: "Included" | "Manual Add VAT" | "No VAT";
+  vat_rate?: number;
   duration_minutes?: number;
   is_return_trip?: number;
   date?: string;
@@ -34,14 +42,27 @@ export interface Trip {
 
 export interface Passenger {
   passenger_name: string;
-  document_number: string;
-  nationality: string;
+  id_no?: string;
+  mobile_no?: string;
+  is_invoice_customer?: number;
+  customer?: string;
+  notes?: string;
+  document_number?: string;
+  nationality?: string;
   contact_no?: string;
   document_type?: string;
   expiry_date?: string;
   passenger_master?: string;
   source?: string;
   is_auto_filled?: number;
+}
+
+export interface TripInvoice {
+  name?: string;
+  trip?: string;
+  status?: "Draft" | "Ready" | "Sales Invoice Created" | "Cancelled";
+  kashf_ready?: boolean | number;
+  kashf_sent?: boolean | number;
 }
 
 export interface Route {

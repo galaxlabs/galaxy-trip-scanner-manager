@@ -3,6 +3,18 @@
 // ✅ No direct calls to tms.galaxylabs.online from browser (avoids CORS)
 
 import { sanitizePassengerPayload } from "./documentType.js";
+import type { TripInvoice } from "../types";
+
+const CREATE_TRIP_INVOICE_METHOD =
+  "tms.transport_management_system.doctype.trip_invoice.trip_invoice.create_trip_invoice_from_trip";
+const MARK_TRIP_INVOICE_READY_METHOD =
+  "tms.transport_management_system.doctype.trip_invoice.trip_invoice.mark_trip_invoice_ready";
+const MARK_KASHF_SENT_METHOD =
+  "tms.transport_management_system.doctype.trip_invoice.trip_invoice.mark_kashf_sent";
+
+export function canPrintKashf(tripInvoice?: TripInvoice | null): boolean {
+  return Boolean(tripInvoice?.kashf_ready && tripInvoice.status !== "Cancelled");
+}
 
 export class FrappeClient {
   static async fetch(method: string, params: any = {}, options: RequestInit = {}) {
@@ -114,7 +126,7 @@ export class FrappeClient {
       // ignore
     }
 
-    const finalFilters: any = { ...(filters || {}) };
+    const finalFilters: any = Array.isArray(filters) ? [...filters] : { ...(filters || {}) };
     if (user && user.username && user.username !== "Administrator" && doctype === "Trip") {
       finalFilters.owner = user.username;
     }
@@ -182,6 +194,26 @@ export class FrappeClient {
   const res = await this.fetch(method, payload, { method: "POST" });
   return res.message;
 }
+
+  static async createTripInvoiceFromTrip(tripName: string) {
+    const res = await this.fetch(CREATE_TRIP_INVOICE_METHOD, { trip_name: tripName }, { method: "POST" });
+    return res.message;
+  }
+
+  static async getTripInvoice(name: string) {
+    const res = await this.getDoc("Trip Invoice", name);
+    return res.message;
+  }
+
+  static async markTripInvoiceReady(name: string) {
+    const res = await this.fetch(MARK_TRIP_INVOICE_READY_METHOD, { trip_invoice: name }, { method: "POST" });
+    return res.message;
+  }
+
+  static async markKashfSent(name: string) {
+    const res = await this.fetch(MARK_KASHF_SENT_METHOD, { trip_invoice: name }, { method: "POST" });
+    return res.message;
+  }
 
 
   static getPrintUrl(doctype: string, name: string, format?: string) {

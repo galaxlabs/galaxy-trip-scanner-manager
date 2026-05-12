@@ -97,6 +97,38 @@ export class FrappeClient {
     return res.message;
   }
 
+  static async createTripInvoiceFromTrip(tripName: string) {
+    const res = await this.fetch(
+      "tms.transport_management_system.doctype.trip_invoice.trip_invoice.create_trip_invoice_from_trip",
+      { trip_name: tripName },
+      { method: "POST" }
+    );
+    return res.message;
+  }
+
+  static async getTripInvoice(name: string) {
+    const res = await this.getDoc("Trip Invoice", name);
+    return res.message;
+  }
+
+  static async markTripInvoiceReady(name: string) {
+    const res = await this.fetch(
+      "tms.transport_management_system.doctype.trip_invoice.trip_invoice.mark_trip_invoice_ready",
+      { trip_invoice: name },
+      { method: "POST" }
+    );
+    return res.message;
+  }
+
+  static async markKashfSent(name: string) {
+    const res = await this.fetch(
+      "tms.transport_management_system.doctype.trip_invoice.trip_invoice.mark_kashf_sent",
+      { trip_invoice: name },
+      { method: "POST" }
+    );
+    return res.message;
+  }
+
   static getPrintUrl(doctype: string, name: string, format?: string) {
     const fmt = format || doctype;
     const url = new URL("/api/print", window.location.origin);

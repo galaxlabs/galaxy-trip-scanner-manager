@@ -13,6 +13,7 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) => {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [routes, setRoutes] = useState<Route[]>([]);
+  const [tripInvoiceStatus, setTripInvoiceStatus] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -25,12 +26,32 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) 
     try {
       const [tripsRes, routesRes] = await Promise.all([
         FrappeClient.getList('Trip', {}, [
-          'name', 'trip_status', 'from_location', 'to_location', 'departure', 'driver', 'assigned_vehicle', 'trip_route', 'distance', 'duration_minutes'
+          'name', 'trip_status', 'from_location', 'to_location', 'departure', 'driver', 'assigned_vehicle', 'trip_route', 'distance', 'duration_minutes', 'trip_invoice', 'trip_invoice_created'
         ]),
         FrappeClient.getList('Route', {}, ['name', 'from_place_full', 'to_place_full', 'distance', 'duration_minutes', 'return_route'])
       ]);
-      setTrips(tripsRes.message || []);
+      const nextTrips = tripsRes.message || [];
+      setTrips(nextTrips);
       setRoutes(routesRes.message || []);
+
+      const invoiceNames = nextTrips.map((trip: Trip) => trip.trip_invoice).filter(Boolean);
+      if (invoiceNames.length) {
+        const invoicesRes = await FrappeClient.getList(
+          'Trip Invoice',
+          [['name', 'in', invoiceNames]],
+          ['name', 'status', 'kashf_ready'],
+          invoiceNames.length
+        );
+        const statusMap = Object.fromEntries(
+          (invoicesRes.message || []).map((invoice: any) => [
+            invoice.name,
+            invoice.status === 'Ready' && invoice.kashf_ready ? 'Ready for Kashf' : invoice.status,
+          ])
+        );
+        setTripInvoiceStatus(statusMap);
+      } else {
+        setTripInvoiceStatus({});
+      }
     } catch (err: any) {
       setError(err.message || "Failed to fetch data");
     } finally {
@@ -100,11 +121,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) 
     }
   };
 
-  const handlePrintAction = (e: React.MouseEvent, trip: Trip) => {
+  const handleOpenTripInvoice = (e: React.MouseEvent, trip: Trip) => {
     e.stopPropagation();
     setActiveMenu(null);
-    window.open(FrappeClient.getPrintUrl('Trip', trip.name!), '_blank');
+    if (trip.trip_invoice) {
+      window.open(`/app/trip-invoice/${encodeURIComponent(trip.trip_invoice)}`, '_blank');
+    }
   };
+
+  const getInvoiceStatusLabel = (trip: Trip) =>
+    trip.trip_invoice ? (tripInvoiceStatus[trip.trip_invoice] || "Trip Invoice Draft") : "No Trip Invoice";
 
   return (
     <div className={`p-4 space-y-6 ${fontClass}`}>
@@ -168,12 +194,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) 
                                 </div>
                                 {t.returnTrip}
                             </button>
-                            <button onClick={(e) => handlePrintAction(e, trip)} className="w-full text-left rtl:text-right px-6 py-4 text-[10px] font-black text-slate-600 hover:bg-slate-50 flex items-center gap-3 border-t border-slate-50 uppercase transition-colors">
+                            {trip.trip_invoice && (
+                            <button onClick={(e) => handleOpenTripInvoice(e, trip)} className="w-full text-left rtl:text-right px-6 py-4 text-[10px] font-black text-slate-600 hover:bg-slate-50 flex items-center gap-3 border-t border-slate-50 uppercase transition-colors">
                                 <div className="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2z"/></svg>
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 7h4m0 0v4m0-4L7 17"/></svg>
                                 </div>
-                                {t.printPdf}
+                                Trip Invoice
                             </button>
+                            )}
                         </div>
                     )}
                   </div>
@@ -205,6 +233,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) 
                         <span className="text-[10px] font-black text-slate-600 uppercase tracking-tighter truncate max-w-[140px]">{trip.driver || t.noDriver}</span>
                     </div>
                     <div className="text-right">
+                        <p className="text-[8px] font-black text-violet-400 uppercase tracking-widest mb-1">{getInvoiceStatusLabel(trip)}</p>
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{trip.departure ? new Date(trip.departure).toLocaleDateString(lang, { day: '2-digit', month: 'short' }) : 'N/A'}</p>
                     </div>
                   </div>
