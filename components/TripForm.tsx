@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Trip, Route, Staff, Passenger, Language, TripInvoice } from '../types';
-import { FrappeClient, canPrintKashf } from '../services/frappe';
+import { FrappeClient, canPrintKashf, isFrappeCheckEnabled } from '../services/frappe';
 import { extractDocumentInfo } from '../services/geminiService';
 import { translations } from '../translations';
 
@@ -44,11 +44,14 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
   const getRouteLabel = (route: Route) =>
     `${route.from_place_full || route.name} -> ${route.to_place_full || ""}${route.route_value ? ` | ${route.route_value}` : ""}`;
+  const hasTripInvoice = Boolean(formData.trip_invoice);
+  const tripInvoiceAlreadyCreated = isFrappeCheckEnabled(formData.trip_invoice_created) || hasTripInvoice;
+  const hasTripValue = Number(formData.trip_value || 0) > 0;
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const routesRes = await FrappeClient.getList('Route', {}, ['name', 'from_place_full', 'to_place_full', 'distance', 'duration_minutes', 'return_route', 'route_value']);
+        const routesRes = await FrappeClient.getList('Route', {}, ['name', 'from_place_full', 'to_place_full', 'distance', 'duration_minutes', 'return_route', 'route_value'], 500);
         const staffRes = await FrappeClient.getList('Staff', {}, ['name', 'vehicle_assigned']);
         const nextRoutes = routesRes.message || [];
         setRoutes(nextRoutes);
@@ -353,6 +356,16 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
     window.open(FrappeClient.getPrintUrl('Trip Invoice', tripInvoice.name, 'Kashf'), '_blank');
   };
 
+  const printTripSheet = () => {
+    if (!formData.name) return showToast(t.savePrintErr, "error");
+    window.open(FrappeClient.getPrintUrl('Trip', formData.name, 'Trip'), '_blank');
+  };
+
+  const printTripInvoice = () => {
+    if (!tripInvoice?.name) return;
+    window.open(FrappeClient.getPrintUrl('Trip Invoice', tripInvoice.name, 'Trip Invoice POS'), '_blank');
+  };
+
   const openTripInvoice = () => {
     if (!formData.trip_invoice) return;
     window.open(FrappeClient.getDeskUrl('Trip Invoice', formData.trip_invoice), "_blank");
@@ -365,6 +378,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
       const result = await FrappeClient.markTripInvoiceReady(formData.trip_invoice);
       const invoice = await FrappeClient.getTripInvoice(formData.trip_invoice);
       setTripInvoice({ ...invoice, ...result });
+      setFormData(prev => ({ ...prev, trip_invoice_created: 1, trip_invoice: formData.trip_invoice }));
       showToast("Trip Invoice is ready for Kashf.", "success");
     } catch (err: any) {
       showToast(err.message || "Error", "error");
@@ -375,10 +389,10 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
 
   const createTripInvoice = async () => {
     if (!formData.name) return showToast(t.savePrintErr, "error");
-    if (formData.trip_invoice_created || formData.trip_invoice) {
+    if (tripInvoiceAlreadyCreated) {
       return showToast("Trip Invoice already exists.", "error");
     }
-    if (!Number(formData.trip_value || 0)) {
+    if (!hasTripValue) {
       return showToast("Trip Value is required before creating Trip Invoice.", "error");
     }
     if (formData.billing_mode === "KM Based" && Number(formData.distance || 0) <= 0) {
@@ -388,12 +402,13 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
     setInvoiceLoading(true);
     try {
       const result = await FrappeClient.createTripInvoiceFromTrip(formData.name);
+      const invoice = result.trip_invoice ? await FrappeClient.getTripInvoice(result.trip_invoice) : null;
       setFormData(prev => ({
         ...prev,
         trip_invoice_created: 1,
         trip_invoice: result.trip_invoice,
       }));
-      setTripInvoice({
+      setTripInvoice(invoice || {
         name: result.trip_invoice,
         trip: result.trip,
         status: result.status,
@@ -466,6 +481,15 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
         {/* Record Quick Actions */}
         {formData.name && (
             <div className="grid grid-cols-2 gap-4">
+                <button
+                    onClick={printTripSheet}
+                    className="bg-white text-slate-700 py-4 rounded-[1.5rem] border border-slate-100 flex items-center justify-center gap-2.5 active:scale-[0.98] transition-all shadow-sm group"
+                >
+                    <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2z"/></svg>
+                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-widest">Print Trip</span>
+                </button>
                 <button 
                     onClick={() => setConfirmModal({ title: t.duplicateTrip, desc: t.duplicateDesc, action: execDuplicate })}
                     className="bg-white text-slate-700 py-4 rounded-[1.5rem] border border-slate-100 flex items-center justify-center gap-2.5 active:scale-[0.98] transition-all shadow-sm group"
@@ -484,10 +508,10 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                     </div>
                     <span className="text-[10px] font-black uppercase tracking-widest">{t.returnTrip}</span>
                 </button>
-                {!formData.trip_invoice_created && !formData.trip_invoice && (
+                {!tripInvoiceAlreadyCreated && (
                     <button
                         onClick={createTripInvoice}
-                        disabled={invoiceLoading || !formData.trip_value}
+                        disabled={invoiceLoading || !hasTripValue}
                         className="bg-white text-slate-700 py-4 rounded-[1.5rem] border border-slate-100 flex items-center justify-center gap-2.5 active:scale-[0.98] transition-all shadow-sm group disabled:opacity-40"
                     >
                         <div className="w-8 h-8 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -496,7 +520,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                         <span className="text-[10px] font-black uppercase tracking-widest">{invoiceLoading ? "Creating..." : "Create Trip Invoice"}</span>
                     </button>
                 )}
-                {formData.trip_invoice && (
+                {hasTripInvoice && (
                     <button
                         onClick={openTripInvoice}
                         className="bg-white text-slate-700 py-4 rounded-[1.5rem] border border-slate-100 flex items-center justify-center gap-2.5 active:scale-[0.98] transition-all shadow-sm group"
@@ -507,7 +531,18 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                         <span className="text-[10px] font-black uppercase tracking-widest">Open Trip Invoice</span>
                     </button>
                 )}
-                {formData.trip_invoice && tripInvoice?.status !== "Ready" && !tripInvoice?.kashf_ready && (
+                {hasTripInvoice && tripInvoice?.name && (
+                    <button
+                        onClick={printTripInvoice}
+                        className="bg-white text-slate-700 py-4 rounded-[1.5rem] border border-slate-100 flex items-center justify-center gap-2.5 active:scale-[0.98] transition-all shadow-sm group"
+                    >
+                        <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M9 12h6m-6 4h6M5 4h14v16H5z"/></svg>
+                        </div>
+                        <span className="text-[10px] font-black uppercase tracking-widest">Print Invoice</span>
+                    </button>
+                )}
+                {hasTripInvoice && tripInvoice?.status !== "Ready" && !isFrappeCheckEnabled(tripInvoice?.kashf_ready) && (
                     <button
                         onClick={markTripInvoiceReady}
                         disabled={invoiceLoading}
@@ -519,7 +554,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                         <span className="text-[10px] font-black uppercase tracking-widest">Mark Ready</span>
                     </button>
                 )}
-                {formData.trip_invoice && canPrintKashf(tripInvoice) && (
+                {hasTripInvoice && canPrintKashf(tripInvoice) && (
                     <button
                         onClick={handlePrint}
                         className="bg-white text-slate-700 py-4 rounded-[1.5rem] border border-slate-100 flex items-center justify-center gap-2.5 active:scale-[0.98] transition-all shadow-sm group"
@@ -534,6 +569,50 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
         )}
 
         {/* AI Scanner Card */}
+        {tripInvoice?.name && (
+            <section className="bg-white p-7 rounded-[2rem] shadow-sm border border-slate-100 space-y-5 text-left rtl:text-right">
+                <div className="flex items-center justify-between gap-3">
+                    <div>
+                        <h3 className="text-sm font-black text-slate-900 uppercase tracking-tighter">Trip Invoice</h3>
+                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-1">{tripInvoice.name}</p>
+                    </div>
+                    <span className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase ${canPrintKashf(tripInvoice) ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {canPrintKashf(tripInvoice) ? 'Ready' : (tripInvoice.status || 'Draft')}
+                    </span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-[10px] font-bold text-slate-600">
+                    <div className="bg-slate-50 rounded-2xl p-4">
+                        <p className="text-slate-300 font-black uppercase mb-1">Passenger</p>
+                        <p className="text-slate-900">{tripInvoice.invoice_passenger_name || '-'}</p>
+                    </div>
+                    <div className="bg-slate-50 rounded-2xl p-4">
+                        <p className="text-slate-300 font-black uppercase mb-1">Grand Total</p>
+                        <p className="text-slate-900">{tripInvoice.grand_total ?? 0}</p>
+                    </div>
+                </div>
+                <div className="overflow-hidden rounded-2xl border border-slate-100">
+                    {(tripInvoice.items || []).map((item, idx) => (
+                        <div key={idx} className="grid grid-cols-[1fr_auto] gap-3 px-4 py-3 border-b last:border-b-0 border-slate-100 text-[10px]">
+                            <div>
+                                <p className="font-black text-slate-800 uppercase">{item.description || item.item_name || 'Trip Route'}</p>
+                                <p className="font-bold text-slate-400">Qty {item.qty || 0} x {item.rate || 0}</p>
+                            </div>
+                            <p className="font-black text-slate-900">{item.total_amount ?? 0}</p>
+                        </div>
+                    ))}
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                    <button onClick={printTripInvoice} className="bg-blue-600 text-white py-3 rounded-2xl text-[10px] font-black uppercase">Invoice</button>
+                    {!canPrintKashf(tripInvoice) ? (
+                        <button onClick={markTripInvoiceReady} disabled={invoiceLoading} className="bg-emerald-600 text-white py-3 rounded-2xl text-[10px] font-black uppercase disabled:opacity-40">Ready</button>
+                    ) : (
+                        <button onClick={handlePrint} className="bg-indigo-600 text-white py-3 rounded-2xl text-[10px] font-black uppercase">Kashf</button>
+                    )}
+                    <button onClick={openTripInvoice} className="bg-slate-900 text-white py-3 rounded-2xl text-[10px] font-black uppercase">Desk</button>
+                </div>
+            </section>
+        )}
+
         <div className="bg-white p-7 rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-slate-100 relative overflow-hidden group text-left rtl:text-right">
             <div className="flex items-center justify-between mb-8 cursor-pointer" onClick={triggerCamera}>
                 <div>

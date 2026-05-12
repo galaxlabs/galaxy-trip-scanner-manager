@@ -63,6 +63,22 @@ export interface TripInvoice {
   status?: "Draft" | "Ready" | "Sales Invoice Created" | "Cancelled";
   kashf_ready?: boolean | number;
   kashf_sent?: boolean | number;
+  invoice_passenger_name?: string;
+  invoice_passenger_mobile?: string;
+  from_location?: string;
+  to_location?: string;
+  net_total?: number;
+  vat_amount?: number;
+  grand_total?: number;
+  items?: Array<{
+    description?: string;
+    item_name?: string;
+    qty?: number;
+    rate?: number;
+    amount?: number;
+    vat_amount?: number;
+    total_amount?: number;
+  }>;
 }
 
 export interface Route {

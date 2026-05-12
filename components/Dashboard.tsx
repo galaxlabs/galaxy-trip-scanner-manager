@@ -28,7 +28,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) 
         FrappeClient.getList('Trip', {}, [
           'name', 'trip_status', 'from_location', 'to_location', 'departure', 'driver', 'assigned_vehicle', 'trip_route', 'distance', 'duration_minutes', 'trip_invoice', 'trip_invoice_created'
         ]),
-        FrappeClient.getList('Route', {}, ['name', 'from_place_full', 'to_place_full', 'distance', 'duration_minutes', 'return_route', 'route_value'])
+        FrappeClient.getList('Route', {}, ['name', 'from_place_full', 'to_place_full', 'distance', 'duration_minutes', 'return_route', 'route_value'], 500)
       ]);
       const nextTrips = tripsRes.message || [];
       setTrips(nextTrips);

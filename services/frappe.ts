@@ -14,7 +14,11 @@ const MARK_KASHF_SENT_METHOD =
 const DEFAULT_FRAPPE_BASE_URL = "https://tms.galaxylabs.online";
 
 export function canPrintKashf(tripInvoice?: TripInvoice | null): boolean {
-  return Boolean(tripInvoice?.kashf_ready && tripInvoice.status !== "Cancelled");
+  return isFrappeCheckEnabled(tripInvoice?.kashf_ready) && tripInvoice?.status !== "Cancelled";
+}
+
+export function isFrappeCheckEnabled(value: unknown): boolean {
+  return value === true || value === 1 || value === "1";
 }
 
 function getFrappeBaseUrl(): string {
