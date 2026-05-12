@@ -28,7 +28,7 @@ export interface Trip {
   to_location?: string;
   distance?: number;
   trip_value?: number;
-  trip_invoice_created?: boolean | number;
+  trip_invoice_created?: boolean | number | string;
   trip_invoice?: string;
   invoice_passenger_name?: string;
   invoice_passenger_mobile?: string;
@@ -61,8 +61,8 @@ export interface TripInvoice {
   name?: string;
   trip?: string;
   status?: "Draft" | "Ready" | "Sales Invoice Created" | "Cancelled";
-  kashf_ready?: boolean | number;
-  kashf_sent?: boolean | number;
+  kashf_ready?: boolean | number | string;
+  kashf_sent?: boolean | number | string;
   invoice_passenger_name?: string;
   invoice_passenger_mobile?: string;
   from_location?: string;
