@@ -14,13 +14,77 @@ const TripInvoiceForm: React.FC<TripInvoiceFormProps> = ({ invoiceName, lang, on
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const fontClass = lang === 'ar' ? 'font-ar' : lang === 'ur' ? 'font-ur' : '';
+  const hasPrintableInvoice = Boolean(invoice?.name && invoice.status === "Ready" && Number(invoice?.grand_total || 0) > 0);
+
+  const roundCurrency = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+
+  const makeDefaultItem = (doc: TripInvoice) => ({
+    doctype: "Trip Invoice Item" as const,
+    source_type: "Trip Route" as const,
+    trip: doc.trip,
+    route: doc.trip_route,
+    description: [doc.trip, doc.from_location, doc.to_location].filter(Boolean).join(" | "),
+    qty: doc.billing_mode === "KM Based" && Number(doc.distance || 0) > 0 ? Number(doc.distance) : 1,
+    rate:
+      doc.billing_mode === "KM Based" && Number(doc.distance || 0) > 0
+        ? roundCurrency(Number(doc.trip_value || 0) / Number(doc.distance || 1))
+        : Number(doc.trip_value || 0),
+    vat_rate: Number(doc.vat_rate || 15),
+    vat_category: "Standard 15%" as const,
+    is_manual: 0,
+  });
+
+  const calculateInvoice = (doc: TripInvoice): TripInvoice => {
+    const vatMode = doc.vat_mode || "Included";
+    const parentVatRate = Number(doc.vat_rate ?? 15);
+    const sourceItems = doc.items?.length ? doc.items : [makeDefaultItem(doc)];
+
+    const items = sourceItems.map((item) => {
+      const qty = Number(item.qty || 0);
+      const rate = Number(item.rate || 0);
+      const grossOrNet = qty * rate;
+      const itemVatRate = Number(item.vat_rate ?? parentVatRate);
+      const noVat = ["Zero Rated", "Exempt", "Out of Scope"].includes(String(item.vat_category || ""));
+
+      let amount = grossOrNet;
+      let vatAmount = 0;
+      let totalAmount = grossOrNet;
+
+      if (!noVat && vatMode === "Included") {
+        amount = grossOrNet / (1 + itemVatRate / 100);
+        vatAmount = grossOrNet - amount;
+        totalAmount = grossOrNet;
+      } else if (!noVat && vatMode === "Manual Add VAT") {
+        vatAmount = amount * itemVatRate / 100;
+        totalAmount = amount + vatAmount;
+      }
+
+      return {
+        ...item,
+        doctype: "Trip Invoice Item" as const,
+        qty,
+        rate,
+        amount: roundCurrency(amount),
+        vat_amount: roundCurrency(vatAmount),
+        total_amount: roundCurrency(totalAmount),
+      };
+    });
+
+    return {
+      ...doc,
+      items,
+      net_total: roundCurrency(items.reduce((sum, item) => sum + Number(item.amount || 0), 0)),
+      vat_amount: roundCurrency(items.reduce((sum, item) => sum + Number(item.vat_amount || 0), 0)),
+      grand_total: roundCurrency(items.reduce((sum, item) => sum + Number(item.total_amount || 0), 0)),
+    };
+  };
 
   useEffect(() => {
     const loadInvoice = async () => {
       setLoading(true);
       try {
         const doc = await FrappeClient.getTripInvoice(invoiceName);
-        setInvoice(doc);
+        setInvoice(calculateInvoice(doc));
       } catch (err: any) {
         setMessage(err.message || "Failed to load Trip Invoice");
       } finally {
@@ -31,7 +95,7 @@ const TripInvoiceForm: React.FC<TripInvoiceFormProps> = ({ invoiceName, lang, on
   }, [invoiceName]);
 
   const updateInvoice = (patch: Partial<TripInvoice>) => {
-    setInvoice(prev => prev ? { ...prev, ...patch } : prev);
+    setInvoice(prev => prev ? calculateInvoice({ ...prev, ...patch }) : prev);
   };
 
   const updateItem = (idx: number, patch: Record<string, any>) => {
@@ -39,17 +103,27 @@ const TripInvoiceForm: React.FC<TripInvoiceFormProps> = ({ invoiceName, lang, on
       if (!prev) return prev;
       const items = [...(prev.items || [])];
       items[idx] = { ...items[idx], ...patch };
-      return { ...prev, items };
+      return calculateInvoice({ ...prev, items });
     });
   };
 
   const saveInvoice = async () => {
     if (!invoice) return;
+    const calculated = calculateInvoice(invoice);
+    if (Number(calculated.grand_total || 0) <= 0) {
+      setMessage("Grand Total must be greater than zero before saving.");
+      return;
+    }
     setSaving(true);
     setMessage("");
     try {
-      const saved = await FrappeClient.saveDoc('Trip Invoice', invoice);
-      setInvoice(saved);
+      const saved = await FrappeClient.saveDoc('Trip Invoice', {
+        ...calculated,
+        doctype: "Trip Invoice",
+        status: calculated.status === "Cancelled" ? calculated.status : "Ready",
+        kashf_ready: 1,
+      });
+      setInvoice(calculateInvoice(saved));
       setMessage("Trip Invoice saved.");
     } catch (err: any) {
       setMessage(err.message || "Failed to save Trip Invoice");
@@ -58,25 +132,12 @@ const TripInvoiceForm: React.FC<TripInvoiceFormProps> = ({ invoiceName, lang, on
     }
   };
 
-  const markReady = async () => {
-    if (!invoice?.name) return;
-    setSaving(true);
-    setMessage("");
-    try {
-      await FrappeClient.markTripInvoiceReady(invoice.name);
-      const latest = await FrappeClient.getTripInvoice(invoice.name);
-      setInvoice(latest);
-      setMessage("Trip Invoice is ready.");
-    } catch (err: any) {
-      setMessage(err.message || "Failed to mark ready");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const printInvoice = () => {
-    if (!invoice?.name) return;
-    window.open(FrappeClient.getPrintUrl('Trip Invoice', invoice.name, 'Trip Invoice POS'), '_blank');
+    if (!hasPrintableInvoice) {
+      setMessage("Save Trip Invoice with Grand Total before printing.");
+      return;
+    }
+    window.open(FrappeClient.getPrintUrl('Trip Invoice', invoice.name!, 'Trip Invoice POS'), '_blank');
   };
 
   if (loading) {
@@ -107,9 +168,7 @@ const TripInvoiceForm: React.FC<TripInvoiceFormProps> = ({ invoiceName, lang, on
           <h2 className="text-[10px] font-black text-slate-300 uppercase tracking-widest leading-none mb-1">Trip Invoice</h2>
           <p className="text-[11px] font-black text-slate-900 truncate uppercase tracking-tight">{invoice.name}</p>
         </div>
-        <button onClick={saveInvoice} disabled={saving} className="px-5 py-2.5 rounded-2xl font-black text-[10px] uppercase bg-slate-900 text-white shadow-lg shadow-slate-200 disabled:opacity-50">
-          {saving ? "Saving" : "Save"}
-        </button>
+        <div className="w-10" />
       </div>
 
       {message && (
@@ -167,10 +226,8 @@ const TripInvoiceForm: React.FC<TripInvoiceFormProps> = ({ invoiceName, lang, on
         </section>
 
         <div className="grid grid-cols-2 gap-4">
-          {invoice.status !== "Ready" && (
-            <button onClick={markReady} disabled={saving} className="bg-emerald-600 text-white py-4 rounded-2xl text-[10px] font-black uppercase disabled:opacity-50">Mark Ready</button>
-          )}
-          <button onClick={printInvoice} className="bg-blue-600 text-white py-4 rounded-2xl text-[10px] font-black uppercase">Print Invoice</button>
+          <button onClick={saveInvoice} disabled={saving} className="bg-slate-900 text-white py-4 rounded-2xl text-[10px] font-black uppercase disabled:opacity-50">Save Invoice</button>
+          <button onClick={printInvoice} disabled={!hasPrintableInvoice} className="bg-blue-600 text-white py-4 rounded-2xl text-[10px] font-black uppercase disabled:opacity-40">Print Invoice</button>
         </div>
       </div>
     </div>

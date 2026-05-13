@@ -49,7 +49,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
     `${route.from_place_full || route.name} -> ${route.to_place_full || ""}${route.route_value ? ` | ${route.route_value}` : ""}`;
   const hasTripInvoice = Boolean(formData.trip_invoice);
   const tripInvoiceAlreadyCreated = isFrappeCheckEnabled(formData.trip_invoice_created) || hasTripInvoice;
-  const hasTripValue = Number(formData.trip_value || 0) > 0;
+  const tripInvoiceSavedForPrint = Boolean(tripInvoice?.name && tripInvoice.status === "Ready" && Number(tripInvoice.grand_total || 0) > 0);
 
   useEffect(() => {
     formDataRef.current = formData;
@@ -348,9 +348,15 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
     }
   };
 
-  const saveTrip = async () => {
-    if (!formData.driver) return showToast(t.selectDriverErr, "error");
-    if (!formData.trip_route) return showToast(t.selectRouteErr, "error");
+  const saveTripDocument = async (showSuccess = true): Promise<Trip | null> => {
+    if (!formData.driver) {
+      showToast(t.selectDriverErr, "error");
+      return null;
+    }
+    if (!formData.trip_route) {
+      showToast(t.selectRouteErr, "error");
+      return null;
+    }
     setLoading(true);
     try {
       const savedDoc = await FrappeClient.saveDoc('Trip', {
@@ -360,13 +366,20 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
         ...formData,
       });
       setFormData(savedDoc);
+      formDataRef.current = savedDoc;
       setIsDirty(false);
-      showToast(t.syncSuccess, "success");
+      if (showSuccess) showToast(t.syncSuccess, "success");
+      return savedDoc;
     } catch (err: any) {
       showToast(err.message || "Error", "error");
+      return null;
     } finally {
       setLoading(false);
     }
+  };
+
+  const saveTrip = async () => {
+    await saveTripDocument(true);
   };
 
   const autoSaveTripAfterScan = async () => {
@@ -389,31 +402,36 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
   };
 
   const handlePrint = () => {
-    if (!tripInvoice?.name) return;
+    if (!tripInvoiceSavedForPrint || !tripInvoice?.name) return;
     window.open(FrappeClient.getPrintUrl('Trip Invoice', tripInvoice.name, 'Trip Invoice POS'), '_blank');
   };
 
   const printTripSheet = () => {
     if (!formData.name) return showToast(t.savePrintErr, "error");
-    if (!hasTripInvoice) return showToast("Create Trip Invoice before printing Trip.", "error");
+    if (!tripInvoiceSavedForPrint) return showToast("Save Trip Invoice before printing Trip.", "error");
     window.open(FrappeClient.getPrintUrl('Trip', formData.name, 'Trip'), '_blank');
   };
 
   const createTripInvoice = async () => {
-    if (!formData.name) return showToast(t.savePrintErr, "error");
+    let sourceTrip = formData;
+    if (!sourceTrip.name || isDirty) {
+      const saved = await saveTripDocument(false);
+      if (!saved?.name) return;
+      sourceTrip = saved;
+    }
     if (tripInvoiceAlreadyCreated) {
       return showToast("Trip Invoice already exists.", "error");
     }
-    if (!hasTripValue) {
+    if (Number(sourceTrip.trip_value || 0) <= 0) {
       return showToast("Trip Value is required before creating Trip Invoice.", "error");
     }
-    if (formData.billing_mode === "KM Based" && Number(formData.distance || 0) <= 0) {
+    if (sourceTrip.billing_mode === "KM Based" && Number(sourceTrip.distance || 0) <= 0) {
       return showToast("Distance is required for KM Based billing.", "error");
     }
 
     setInvoiceLoading(true);
     try {
-      const result = await FrappeClient.createTripInvoiceFromTrip(formData.name);
+      const result = await FrappeClient.createTripInvoiceFromTrip(sourceTrip.name);
       const invoice = result.trip_invoice ? await FrappeClient.getTripInvoice(result.trip_invoice) : null;
       const nextInvoice = invoice || {
         name: result.trip_invoice,
@@ -506,7 +524,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
         {/* Record Quick Actions */}
         {formData.name && (
             <div className="grid grid-cols-2 gap-4">
-                {hasTripInvoice && (
+                {tripInvoiceSavedForPrint && (
                     <button
                         onClick={printTripSheet}
                         className="bg-white text-slate-700 py-4 rounded-[1.5rem] border border-slate-100 flex items-center justify-center gap-2.5 active:scale-[0.98] transition-all shadow-sm group"
@@ -538,7 +556,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                 {!tripInvoiceAlreadyCreated && (
                     <button
                         onClick={createTripInvoice}
-                        disabled={invoiceLoading || !hasTripValue}
+                        disabled={invoiceLoading || loading}
                         className="bg-white text-slate-700 py-4 rounded-[1.5rem] border border-slate-100 flex items-center justify-center gap-2.5 active:scale-[0.98] transition-all shadow-sm group disabled:opacity-40"
                     >
                         <div className="w-8 h-8 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -558,7 +576,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                         <span className="text-[10px] font-black uppercase tracking-widest">Trip Invoice</span>
                     </button>
                 )}
-                {hasTripInvoice && tripInvoice?.name && (
+                {tripInvoiceSavedForPrint && (
                     <button
                         onClick={handlePrint}
                         className="bg-white text-slate-700 py-4 rounded-[1.5rem] border border-slate-100 flex items-center justify-center gap-2.5 active:scale-[0.98] transition-all shadow-sm group"

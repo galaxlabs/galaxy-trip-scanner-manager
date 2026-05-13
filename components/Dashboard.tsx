@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { Trip, Route, Language } from '../types';
+import { Trip, Route, Language, TripInvoice } from '../types';
 import { FrappeClient, isFrappeCheckEnabled } from '../services/frappe';
 import { translations } from '../translations';
+import TripInvoiceForm from './TripInvoiceForm';
 
 interface DashboardProps {
   onCreateNew: (initialData?: Partial<Trip>) => void;
@@ -13,6 +14,8 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) => {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [routes, setRoutes] = useState<Route[]>([]);
+  const [tripInvoices, setTripInvoices] = useState<TripInvoice[]>([]);
+  const [selectedInvoiceName, setSelectedInvoiceName] = useState<string | null>(null);
   const [tripInvoiceStatus, setTripInvoiceStatus] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
@@ -24,15 +27,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) 
     setLoading(true);
     setError(null);
     try {
-      const [tripsRes, routesRes] = await Promise.all([
+      const [tripsRes, routesRes, invoicesListRes] = await Promise.all([
         FrappeClient.getList('Trip', {}, [
           'name', 'trip_status', 'from_location', 'to_location', 'departure', 'driver', 'assigned_vehicle', 'trip_route', 'distance', 'duration_minutes', 'trip_value', 'billing_mode', 'trip_invoice', 'trip_invoice_created'
         ]),
-        FrappeClient.getList('Route', {}, ['name', 'from_place_full', 'to_place_full', 'distance', 'duration_minutes', 'return_route', 'route_value'], 500)
+        FrappeClient.getList('Route', {}, ['name', 'from_place_full', 'to_place_full', 'distance', 'duration_minutes', 'return_route', 'route_value'], 500),
+        FrappeClient.getList('Trip Invoice', {}, ['name', 'trip', 'status', 'grand_total', 'invoice_passenger_name'], 20)
       ]);
       const nextTrips = tripsRes.message || [];
       setTrips(nextTrips);
       setRoutes(routesRes.message || []);
+      setTripInvoices(invoicesListRes.message || []);
 
       const invoiceNames = nextTrips.map((trip: Trip) => trip.trip_invoice).filter(Boolean);
       if (invoiceNames.length) {
@@ -126,6 +131,19 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) 
   const getInvoiceStatusLabel = (trip: Trip) =>
     trip.trip_invoice ? (tripInvoiceStatus[trip.trip_invoice] || "Trip Invoice Draft") : "No Trip Invoice";
 
+  if (selectedInvoiceName) {
+    return (
+      <TripInvoiceForm
+        invoiceName={selectedInvoiceName}
+        lang={lang}
+        onBack={async () => {
+          setSelectedInvoiceName(null);
+          await fetchData();
+        }}
+      />
+    );
+  }
+
   return (
     <div className={`p-4 space-y-6 ${fontClass}`}>
       <div className="flex items-center justify-between">
@@ -137,6 +155,35 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) 
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
         </button>
       </div>
+
+      {tripInvoices.length > 0 && (
+        <section className="bg-white border border-slate-100 p-5 rounded-[2rem] shadow-sm space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Trip Invoices</h3>
+            <span className="text-[9px] font-black text-slate-300 uppercase">{tripInvoices.length}</span>
+          </div>
+          <div className="space-y-2">
+            {tripInvoices.map((invoice) => (
+              <button
+                key={invoice.name}
+                onClick={() => invoice.name && setSelectedInvoiceName(invoice.name)}
+                className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-left rtl:text-right active:scale-[0.99] transition-all"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black text-slate-900 uppercase truncate">{invoice.name}</p>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase truncate mt-1">{invoice.trip || invoice.invoice_passenger_name || "Trip Invoice"}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-[10px] font-black text-slate-900">{invoice.grand_total ?? 0}</p>
+                    <p className="text-[8px] font-black text-violet-500 uppercase">{invoice.status || "Draft"}</p>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       <div className="space-y-4">
         {loading ? (

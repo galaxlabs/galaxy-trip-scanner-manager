@@ -60,17 +60,32 @@ export interface Passenger {
 export interface TripInvoice {
   name?: string;
   trip?: string;
+  doctype?: "Trip Invoice";
+  company?: string;
+  customer?: string;
   status?: "Draft" | "Ready" | "Sales Invoice Created" | "Cancelled";
   kashf_ready?: boolean | number | string;
   kashf_sent?: boolean | number | string;
   invoice_passenger_name?: string;
   invoice_passenger_mobile?: string;
+  trip_route?: string;
   from_location?: string;
   to_location?: string;
+  distance?: number;
+  trip_value?: number;
+  billing_mode?: "Route Amount" | "KM Based" | "Manual";
+  vat_mode?: "Included" | "Manual Add VAT" | "No VAT";
+  vat_rate?: number;
   net_total?: number;
   vat_amount?: number;
   grand_total?: number;
   items?: Array<{
+    name?: string;
+    doctype?: "Trip Invoice Item";
+    source_type?: "Trip Route" | "Manual Item" | "Adjustment";
+    trip?: string;
+    route?: string;
+    item_code?: string;
     description?: string;
     item_name?: string;
     qty?: number;
@@ -78,6 +93,9 @@ export interface TripInvoice {
     amount?: number;
     vat_amount?: number;
     total_amount?: number;
+    vat_rate?: number;
+    vat_category?: "Standard 15%" | "Zero Rated" | "Exempt" | "Out of Scope";
+    is_manual?: number;
   }>;
 }
 
