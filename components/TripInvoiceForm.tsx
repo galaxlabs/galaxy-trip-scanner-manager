@@ -17,13 +17,25 @@ const TripInvoiceForm: React.FC<TripInvoiceFormProps> = ({ invoiceName, lang, on
   const hasPrintableInvoice = Boolean(invoice?.name && invoice.status === "Ready" && Number(invoice?.grand_total || 0) > 0);
 
   const roundCurrency = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+  const getArabicRouteLabel = (value?: string) => {
+    const parts = String(value || "")
+      .split("|")
+      .map((part) => part.trim())
+      .filter(Boolean);
+    return parts[1] || parts[0] || "";
+  };
+  const getRouteDescription = (doc: TripInvoice) => {
+    const fromLabel = getArabicRouteLabel(doc.from_location);
+    const toLabel = getArabicRouteLabel(doc.to_location);
+    return fromLabel && toLabel ? `${fromLabel}-إلى-${toLabel}` : doc.trip_route || "خدمة نقل";
+  };
 
   const makeDefaultItem = (doc: TripInvoice) => ({
     doctype: "Trip Invoice Item" as const,
     source_type: "Trip Route" as const,
     trip: doc.trip,
     route: doc.trip_route,
-    description: [doc.trip, doc.from_location, doc.to_location].filter(Boolean).join(" | "),
+    description: getRouteDescription(doc),
     qty: doc.billing_mode === "KM Based" && Number(doc.distance || 0) > 0 ? Number(doc.distance) : 1,
     rate:
       doc.billing_mode === "KM Based" && Number(doc.distance || 0) > 0

@@ -42,6 +42,42 @@ function rewriteAssetLinks(html, baseUrl) {
   });
 }
 
+function isTripInvoiceReceiptFormat(format) {
+  return ["Kashf", "Trip Invoice POS"].includes(String(format || "").trim());
+}
+
+async function getFrappeDoc(baseUrl, token, doctype, name) {
+  const url = new URL(`${baseUrl}/api/method/frappe.client.get`);
+  url.searchParams.set("doctype", doctype);
+  url.searchParams.set("name", name);
+
+  const frappeRes = await fetch(url.toString(), {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+      Authorization: token,
+      "X-Frappe-Authorization": token,
+      "X-Requested-With": "XMLHttpRequest",
+    },
+  });
+
+  const raw = await frappeRes.text();
+  let payload = {};
+  try {
+    payload = raw ? JSON.parse(raw) : {};
+  } catch {
+    payload = {};
+  }
+
+  if (!frappeRes.ok) {
+    const err = new Error(payload?.message || `Frappe get failed: HTTP ${frappeRes.status}`);
+    err.status = frappeRes.status;
+    throw err;
+  }
+
+  return payload.message || payload.data || {};
+}
+
 export default async function handler(req, res) {
   if (req.method === "OPTIONS") {
     res.setHeader("Access-Control-Allow-Origin", "*");
@@ -78,14 +114,33 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing doctype or name query param" });
     }
 
+    const normalizedDoctype = String(doctype);
+    const normalizedName = String(name);
+    const normalizedFormat = String(format || doctype);
     const url = new URL(`${BASE_URL}/printview`);
-    url.searchParams.set("doctype", String(doctype));
-    url.searchParams.set("name", String(name));
-    url.searchParams.set("format", String(format || doctype));
+    url.searchParams.set("doctype", normalizedDoctype);
+    url.searchParams.set("name", normalizedName);
+    url.searchParams.set("format", normalizedFormat);
     url.searchParams.set("no_letterhead", String(no_letterhead));
     if (lang) url.searchParams.set("_lang", String(lang));
 
     const token = `token ${API_KEY}:${API_SECRET}`;
+    if (isTripInvoiceReceiptFormat(normalizedFormat)) {
+      if (normalizedDoctype !== "Trip Invoice") {
+        return res.status(403).json({
+          error: "Kashf/POS print is allowed only for Trip Invoice documents.",
+        });
+      }
+
+      const invoice = await getFrappeDoc(BASE_URL, token, "Trip Invoice", normalizedName);
+      const readyStatuses = new Set(["Ready", "Sales Invoice Created"]);
+      if (!readyStatuses.has(String(invoice.status || "")) || !invoice.kashf_ready || Number(invoice.grand_total || 0) <= 0) {
+        return res.status(403).json({
+          error: "Save Trip Invoice and mark it Ready before printing Kashf/POS.",
+        });
+      }
+    }
+
     const frappeRes = await fetch(url.toString(), {
       method: "GET",
       headers: {
