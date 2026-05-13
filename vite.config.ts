@@ -1,6 +1,19 @@
 
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import { existsSync, readFileSync } from 'node:fs';
+
+function readLocalSiteGoogleApiKey() {
+  const siteConfigPath = '/home/dg/dg-b/sites/tms.galaxylabs.online/site_config.json';
+  if (!existsSync(siteConfigPath)) return '';
+
+  try {
+    const siteConfig = JSON.parse(readFileSync(siteConfigPath, 'utf8'));
+    return siteConfig.google_api_key || '';
+  } catch {
+    return '';
+  }
+}
 
 export default defineConfig(({ mode }) => {
   // Load env file based on `mode` in the current working directory.
@@ -10,12 +23,25 @@ export default defineConfig(({ mode }) => {
   process.env.FRAPPE_BASE_URL = process.env.FRAPPE_BASE_URL || env.FRAPPE_BASE_URL;
   process.env.FRAPPE_API_KEY = process.env.FRAPPE_API_KEY || env.FRAPPE_API_KEY;
   process.env.FRAPPE_API_SECRET = process.env.FRAPPE_API_SECRET || env.FRAPPE_API_SECRET;
+  process.env.GEMINI_API_KEY =
+    process.env.GEMINI_API_KEY ||
+    env.GEMINI_API_KEY ||
+    env.GOOGLE_API_KEY ||
+    env.API_KEY ||
+    readLocalSiteGoogleApiKey();
+  process.env.GEMINI_PROVIDER = process.env.GEMINI_PROVIDER || env.GEMINI_PROVIDER || 'api_key';
 
-  const localFrappeApiPlugin = {
-    name: 'local-frappe-api',
+  const localApiPlugin = {
+    name: 'local-api',
     configureServer(server: any) {
       server.middlewares.use(async (req: any, res: any, next: any) => {
-        if (!req.url?.startsWith('/api/frappe')) return next();
+        const apiRoute = req.url?.startsWith('/api/frappe')
+          ? 'frappe'
+          : req.url?.startsWith('/api/gemini')
+            ? 'gemini'
+            : '';
+
+        if (!apiRoute) return next();
 
         const url = new URL(req.url, 'http://localhost');
         const query = Object.fromEntries(url.searchParams.entries());
@@ -49,7 +75,7 @@ export default defineConfig(({ mode }) => {
           },
           send: (payload: unknown) => {
             if (res.statusCode >= 400) {
-              console.error('[api/frappe]', req.method, req.url, res.statusCode, String(payload).slice(0, 500));
+              console.error(`[api/${apiRoute}]`, req.method, req.url, res.statusCode, String(payload).slice(0, 500));
             }
             res.end(typeof payload === 'string' ? payload : JSON.stringify(payload));
             return apiRes;
@@ -61,14 +87,16 @@ export default defineConfig(({ mode }) => {
           end: () => res.end(),
         };
 
-        const { default: handler } = await import('./api/frappe.js');
+        const { default: handler } = apiRoute === 'frappe'
+          ? await import('./api/frappe.js')
+          : await import('./api/gemini.js');
         await handler(apiReq, apiRes);
       });
     },
   };
   
   return {
-    plugins: [localFrappeApiPlugin, react()],
+    plugins: [localApiPlugin, react()],
     define: {
       // This globally replaces process.env references with actual values during build
       'process.env.API_KEY': JSON.stringify(env.API_KEY),
