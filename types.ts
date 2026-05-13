@@ -33,7 +33,7 @@ export interface Trip {
   invoice_passenger_name?: string;
   invoice_passenger_mobile?: string;
   billing_mode?: "Route Amount" | "KM Based" | "Manual";
-  vat_mode?: "Included" | "Manual Add VAT" | "No VAT";
+  vat_mode?: "Included" | "Manual VAT";
   vat_rate?: number;
   duration_minutes?: number;
   is_return_trip?: number;
@@ -74,7 +74,7 @@ export interface TripInvoice {
   distance?: number;
   trip_value?: number;
   billing_mode?: "Route Amount" | "KM Based" | "Manual";
-  vat_mode?: "Included" | "Manual Add VAT" | "No VAT";
+  vat_mode?: "Included" | "Manual VAT";
   vat_rate?: number;
   net_total?: number;
   vat_amount?: number;

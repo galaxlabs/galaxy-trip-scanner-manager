@@ -54,7 +54,7 @@ const TripInvoiceForm: React.FC<TripInvoiceFormProps> = ({ invoiceName, lang, on
         amount = grossOrNet / (1 + itemVatRate / 100);
         vatAmount = grossOrNet - amount;
         totalAmount = grossOrNet;
-      } else if (!noVat && vatMode === "Manual Add VAT") {
+      } else if (!noVat && vatMode === "Manual VAT") {
         vatAmount = amount * itemVatRate / 100;
         totalAmount = amount + vatAmount;
       }
@@ -96,6 +96,26 @@ const TripInvoiceForm: React.FC<TripInvoiceFormProps> = ({ invoiceName, lang, on
 
   const updateInvoice = (patch: Partial<TripInvoice>) => {
     setInvoice(prev => prev ? calculateInvoice({ ...prev, ...patch }) : prev);
+  };
+
+  const updateTripValue = (value: number) => {
+    setInvoice(prev => {
+      if (!prev) return prev;
+      const nextTripValue = Number(value || 0);
+      const sourceItems = prev.items?.length ? [...prev.items] : [makeDefaultItem({ ...prev, trip_value: nextTripValue })];
+      const routeIndex = sourceItems.findIndex((item) => (item.source_type || "Trip Route") === "Trip Route" && !item.is_manual);
+      const targetIndex = routeIndex >= 0 ? routeIndex : 0;
+      const target = sourceItems[targetIndex] || makeDefaultItem(prev);
+      const qty = prev.billing_mode === "KM Based" && Number(prev.distance || 0) > 0 ? Number(prev.distance) : Number(target.qty || 1);
+      sourceItems[targetIndex] = {
+        ...target,
+        qty,
+        rate: prev.billing_mode === "KM Based" && qty > 0 ? roundCurrency(nextTripValue / qty) : nextTripValue,
+        vat_rate: Number(target.vat_rate ?? prev.vat_rate ?? 15),
+        vat_category: target.vat_category || "Standard 15%",
+      };
+      return calculateInvoice({ ...prev, trip_value: nextTripValue, items: sourceItems });
+    });
   };
 
   const updateItem = (idx: number, patch: Record<string, any>) => {
@@ -193,6 +213,23 @@ const TripInvoiceForm: React.FC<TripInvoiceFormProps> = ({ invoiceName, lang, on
               <input value={invoice.invoice_passenger_mobile || ''} onChange={(e) => updateInvoice({ invoice_passenger_mobile: e.target.value })} className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 text-xs font-bold outline-none" />
             </label>
           </div>
+          <div className="grid grid-cols-2 gap-4">
+            <label className="space-y-2">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">VAT Mode</span>
+              <select value={invoice.vat_mode || 'Included'} onChange={(e) => updateInvoice({ vat_mode: e.target.value as TripInvoice['vat_mode'] })} className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 text-xs font-bold outline-none appearance-none">
+                <option value="Included">Included</option>
+                <option value="Manual VAT">Manual Add VAT</option>
+              </select>
+            </label>
+            <label className="space-y-2">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">VAT Rate</span>
+              <input type="number" value={invoice.vat_rate ?? 15} onChange={(e) => updateInvoice({ vat_rate: Number(e.target.value) || 15 })} className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 text-xs font-bold outline-none" />
+            </label>
+          </div>
+          <label className="space-y-2 block">
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Trip Value</span>
+            <input type="number" value={invoice.trip_value ?? ''} onChange={(e) => updateTripValue(Number(e.target.value) || 0)} className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 text-xs font-bold outline-none" />
+          </label>
           <div className="grid grid-cols-3 gap-3 text-center">
             <div className="bg-slate-50 rounded-2xl p-4">
               <p className="text-[8px] font-black text-slate-300 uppercase">Net</p>
@@ -215,10 +252,19 @@ const TripInvoiceForm: React.FC<TripInvoiceFormProps> = ({ invoiceName, lang, on
             {(invoice.items || []).map((item, idx) => (
               <div key={idx} className="bg-slate-50 rounded-[2rem] p-5 border border-slate-100 space-y-4">
                 <input value={item.description || ''} onChange={(e) => updateItem(idx, { description: e.target.value })} className="w-full bg-white border border-slate-100 rounded-2xl px-4 py-3 text-xs font-bold outline-none" placeholder="Description" />
-                <div className="grid grid-cols-3 gap-3">
-                  <input type="number" value={item.qty ?? ''} onChange={(e) => updateItem(idx, { qty: Number(e.target.value) || 0 })} className="w-full bg-white border border-slate-100 rounded-2xl px-4 py-3 text-xs font-bold outline-none" placeholder="Qty" />
-                  <input type="number" value={item.rate ?? ''} onChange={(e) => updateItem(idx, { rate: Number(e.target.value) || 0 })} className="w-full bg-white border border-slate-100 rounded-2xl px-4 py-3 text-xs font-bold outline-none" placeholder="Rate" />
-                  <div className="bg-white border border-slate-100 rounded-2xl px-4 py-3 text-xs font-black text-slate-700">{item.total_amount ?? 0}</div>
+                <div className="grid grid-cols-3 gap-2">
+                  <label className="space-y-1 min-w-0">
+                    <span className="text-[8px] font-black text-slate-300 uppercase">Qty</span>
+                    <input type="number" value={item.qty ?? ''} onChange={(e) => updateItem(idx, { qty: Number(e.target.value) || 0 })} className="w-full bg-white border border-slate-100 rounded-2xl px-3 py-3 text-xs font-bold outline-none" placeholder="Qty" />
+                  </label>
+                  <label className="space-y-1 min-w-0">
+                    <span className="text-[8px] font-black text-slate-300 uppercase">Rate</span>
+                    <input type="number" value={item.rate ?? ''} onChange={(e) => updateItem(idx, { rate: Number(e.target.value) || 0 })} className="w-full bg-white border border-slate-100 rounded-2xl px-3 py-3 text-xs font-bold outline-none" placeholder="Rate" />
+                  </label>
+                  <div className="space-y-1 min-w-0">
+                    <span className="text-[8px] font-black text-slate-300 uppercase">Total</span>
+                    <div className="bg-white border border-slate-100 rounded-2xl px-3 py-3 text-xs font-black text-slate-700 truncate">{item.total_amount ?? 0}</div>
+                  </div>
                 </div>
               </div>
             ))}

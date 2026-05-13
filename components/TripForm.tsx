@@ -5,6 +5,7 @@ import { FrappeClient, isFrappeCheckEnabled } from '../services/frappe';
 import { extractDocumentInfo } from '../services/geminiService';
 import { translations } from '../translations';
 import TripInvoiceForm from './TripInvoiceForm';
+import { getVisibleRoutes, isDefaultRoute } from '../services/routeSearch.js';
 
 interface TripFormProps {
   trip?: Trip | null;
@@ -30,6 +31,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
   });
   const [routes, setRoutes] = useState<Route[]>([]);
   const [routeSearch, setRouteSearch] = useState("");
+  const [routeDropdownOpen, setRouteDropdownOpen] = useState(false);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(false);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
@@ -43,6 +45,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
   const t = translations[lang];
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const routePickerRef = useRef<HTMLDivElement>(null);
   const formDataRef = useRef<Trip>(formData);
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
   const getRouteLabel = (route: Route) =>
@@ -50,10 +53,22 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
   const hasTripInvoice = Boolean(formData.trip_invoice);
   const tripInvoiceAlreadyCreated = isFrappeCheckEnabled(formData.trip_invoice_created) || hasTripInvoice;
   const tripInvoiceSavedForPrint = Boolean(tripInvoice?.name && tripInvoice.status === "Ready" && Number(tripInvoice.grand_total || 0) > 0);
+  const visibleRoutes = getVisibleRoutes(routes, routeSearch) as Route[];
 
   useEffect(() => {
     formDataRef.current = formData;
   }, [formData]);
+
+  useEffect(() => {
+    const closeRoutePicker = (event: MouseEvent) => {
+      if (!routePickerRef.current?.contains(event.target as Node)) {
+        setRouteDropdownOpen(false);
+      }
+    };
+
+    window.addEventListener('click', closeRoutePicker);
+    return () => window.removeEventListener('click', closeRoutePicker);
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -138,12 +153,14 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
             trip_value: route.route_value || prev.trip_value
         }));
         setRouteSearch(getRouteLabel(route));
+        setRouteDropdownOpen(false);
         setIsDirty(true);
     }
   };
 
   const handleRouteSearchChange = (value: string) => {
     setRouteSearch(value);
+    setRouteDropdownOpen(true);
     const route = routes.find(r => getRouteLabel(r) === value || r.name === value);
     if (route) handleRouteUpdate(route.name);
   };
@@ -422,9 +439,6 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
     if (tripInvoiceAlreadyCreated) {
       return showToast("Trip Invoice already exists.", "error");
     }
-    if (Number(sourceTrip.trip_value || 0) <= 0) {
-      return showToast("Trip Value is required before creating Trip Invoice.", "error");
-    }
     if (sourceTrip.billing_mode === "KM Based" && Number(sourceTrip.distance || 0) <= 0) {
       return showToast("Distance is required for KM Based billing.", "error");
     }
@@ -686,18 +700,60 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                             {staff.map(s => <option key={s.name} value={s.name}>{s.name} - {s.vehicle_assigned || 'Unassigned'}</option>)}
                         </select>
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-2 relative" ref={routePickerRef}>
                         <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-widest">{t.routeSelection}</label>
-                        <input
-                            list="trip-route-options"
-                            className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-100 transition-all"
-                            value={routeSearch}
-                            placeholder="Search route"
-                            onChange={(e) => handleRouteSearchChange(e.target.value)}
-                        />
-                        <datalist id="trip-route-options">
-                            {routes.map(r => <option key={r.name} value={getRouteLabel(r)} />)}
-                        </datalist>
+                        <div className="relative">
+                            <input
+                                className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-4 pr-10 py-3 text-[11px] font-black text-slate-800 outline-none focus:ring-2 focus:ring-blue-100 transition-all"
+                                value={routeSearch}
+                                placeholder="Search route"
+                                onFocus={() => setRouteDropdownOpen(true)}
+                                onChange={(e) => handleRouteSearchChange(e.target.value)}
+                            />
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setRouteDropdownOpen((open) => !open);
+                                }}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-xl bg-white border border-slate-100 text-slate-400 flex items-center justify-center active:scale-95"
+                                aria-label="Open route options"
+                            >
+                                <svg className={`w-4 h-4 transition-transform ${routeDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7"/></svg>
+                            </button>
+                        </div>
+
+                        {routeDropdownOpen && (
+                            <div className="absolute z-[120] left-0 right-0 top-full mt-2 bg-white border border-slate-100 rounded-3xl shadow-2xl shadow-slate-200/70 overflow-hidden ring-1 ring-black/5">
+                                <div className="p-2 max-h-72 overflow-y-auto">
+                                    {visibleRoutes.length === 0 ? (
+                                        <div className="px-4 py-6 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest">No routes</div>
+                                    ) : (
+                                        visibleRoutes.map((route) => {
+                                            const defaultRoute = isDefaultRoute(route);
+                                            return (
+                                                <button
+                                                    type="button"
+                                                    key={route.name}
+                                                    onClick={() => handleRouteUpdate(route.name)}
+                                                    className={`w-full text-left rtl:text-right rounded-2xl px-3 py-3 transition-all active:scale-[0.99] ${formData.trip_route === route.name ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'hover:bg-slate-50 text-slate-800'}`}
+                                                >
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <div className="min-w-0">
+                                                            <p className="text-[11px] font-black uppercase truncate">{route.from_place_full || route.name}</p>
+                                                            <p className={`text-[10px] font-bold truncate mt-0.5 ${formData.trip_route === route.name ? 'text-blue-100' : 'text-slate-400'}`}>{route.to_place_full || route.name}</p>
+                                                        </div>
+                                                        {defaultRoute && (
+                                                            <span className={`shrink-0 rounded-lg px-2 py-1 text-[8px] font-black uppercase ${formData.trip_route === route.name ? 'bg-white/15 text-white' : 'bg-amber-50 text-amber-600'}`}>Default</span>
+                                                        )}
+                                                    </div>
+                                                </button>
+                                            );
+                                        })
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
@@ -718,8 +774,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                             <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-widest">VAT Mode</label>
                             <select className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-100 transition-all appearance-none" value={formData.vat_mode || 'Included'} onChange={(e) => { setFormData(prev => ({ ...prev, vat_mode: e.target.value as Trip['vat_mode'] })); setIsDirty(true); }}>
                                 <option value="Included">Included</option>
-                                <option value="Manual Add VAT">Manual Add VAT</option>
-                                <option value="No VAT">No VAT</option>
+                                <option value="Manual VAT">Manual Add VAT</option>
                             </select>
                         </div>
                         <div className="space-y-2">
