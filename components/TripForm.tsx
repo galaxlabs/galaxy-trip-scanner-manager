@@ -48,6 +48,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
   const routePickerRef = useRef<HTMLDivElement>(null);
   const formDataRef = useRef<Trip>(formData);
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+  const normalizeVatMode = (value?: string) => value === "Manual VAT" ? "Excluded" : (value || "Included");
   const getRouteLabel = (route: Route) =>
     `${route.from_place_full || route.name} -> ${route.to_place_full || ""}${route.route_value ? ` | ${route.route_value}` : ""}`;
   const hasTripInvoice = Boolean(formData.trip_invoice);
@@ -84,9 +85,9 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
             const nextTrip = fullTrip.message;
             setFormData({
               billing_mode: "Route Amount",
-              vat_mode: "Included",
               vat_rate: 15,
               ...nextTrip,
+              vat_mode: normalizeVatMode(nextTrip.vat_mode) as Trip["vat_mode"],
             });
             const selectedRoute = nextRoutes.find((r: Route) => r.name === nextTrip.trip_route);
             if (selectedRoute) setRouteSearch(getRouteLabel(selectedRoute));
@@ -377,10 +378,10 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
     setLoading(true);
     try {
       const savedDoc = await FrappeClient.saveDoc('Trip', {
-        billing_mode: "Route Amount",
-        vat_mode: "Included",
-        vat_rate: 15,
         ...formData,
+        billing_mode: "Route Amount",
+        vat_mode: normalizeVatMode(formData.vat_mode),
+        vat_rate: 15,
       });
       setFormData(savedDoc);
       formDataRef.current = savedDoc;
@@ -405,10 +406,10 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
 
     try {
       const savedDoc = await FrappeClient.saveDoc('Trip', {
-        billing_mode: "Route Amount",
-        vat_mode: "Included",
-        vat_rate: 15,
         ...nextTrip,
+        billing_mode: "Route Amount",
+        vat_mode: normalizeVatMode(nextTrip.vat_mode),
+        vat_rate: 15,
       });
       setFormData(savedDoc);
       setIsDirty(false);
@@ -481,11 +482,29 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
       <TripInvoiceForm
         invoiceName={formData.trip_invoice}
         lang={lang}
+        onSaved={(invoice) => {
+          setTripInvoice(invoice);
+          setFormData(prev => ({
+            ...prev,
+            trip_invoice_created: 1,
+            trip_invoice: invoice.name || prev.trip_invoice,
+          }));
+          formDataRef.current = {
+            ...formDataRef.current,
+            trip_invoice_created: 1,
+            trip_invoice: invoice.name || formDataRef.current.trip_invoice,
+          };
+        }}
         onBack={async () => {
           setShowTripInvoiceForm(false);
           if (formData.trip_invoice) {
             const invoice = await FrappeClient.getTripInvoice(formData.trip_invoice);
             setTripInvoice(invoice);
+            setFormData(prev => ({
+              ...prev,
+              trip_invoice_created: 1,
+              trip_invoice: invoice.name || prev.trip_invoice,
+            }));
           }
         }}
       />
@@ -772,14 +791,14 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-widest">VAT Mode</label>
-                            <select className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-100 transition-all appearance-none" value={formData.vat_mode || 'Included'} onChange={(e) => { setFormData(prev => ({ ...prev, vat_mode: e.target.value as Trip['vat_mode'] })); setIsDirty(true); }}>
+                            <select className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-100 transition-all appearance-none" value={normalizeVatMode(formData.vat_mode)} onChange={(e) => { setFormData(prev => ({ ...prev, vat_mode: e.target.value as Trip['vat_mode'] })); setIsDirty(true); }}>
                                 <option value="Included">Included</option>
-                                <option value="Manual VAT">Manual Add VAT</option>
+                                <option value="Excluded">Excluded</option>
                             </select>
                         </div>
                         <div className="space-y-2">
                             <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-widest">VAT Rate</label>
-                            <input type="number" className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-100 transition-all" value={formData.vat_rate ?? 15} onChange={(e) => { setFormData(prev => ({ ...prev, vat_rate: Number(e.target.value) || 15 })); setIsDirty(true); }} />
+                            <input type="number" readOnly className="w-full bg-slate-100 border border-slate-100 rounded-2xl px-5 py-4 text-xs font-bold text-slate-500 outline-none" value={formData.vat_rate ?? 15} />
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">

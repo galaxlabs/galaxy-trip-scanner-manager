@@ -6,9 +6,10 @@ interface TripInvoiceFormProps {
   invoiceName: string;
   lang: Language;
   onBack: () => void;
+  onSaved?: (invoice: TripInvoice) => void;
 }
 
-const TripInvoiceForm: React.FC<TripInvoiceFormProps> = ({ invoiceName, lang, onBack }) => {
+const TripInvoiceForm: React.FC<TripInvoiceFormProps> = ({ invoiceName, lang, onBack, onSaved }) => {
   const [invoice, setInvoice] = useState<TripInvoice | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -17,6 +18,7 @@ const TripInvoiceForm: React.FC<TripInvoiceFormProps> = ({ invoiceName, lang, on
   const hasPrintableInvoice = Boolean(invoice?.name && invoice.status === "Ready" && Number(invoice?.grand_total || 0) > 0);
 
   const roundCurrency = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+  const normalizeVatMode = (value?: string) => value === "Manual VAT" ? "Excluded" : (value || "Included");
   const getArabicRouteLabel = (value?: string) => {
     const parts = String(value || "")
       .split("|")
@@ -47,7 +49,7 @@ const TripInvoiceForm: React.FC<TripInvoiceFormProps> = ({ invoiceName, lang, on
   });
 
   const calculateInvoice = (doc: TripInvoice): TripInvoice => {
-    const vatMode = doc.vat_mode || "Included";
+    const vatMode = normalizeVatMode(doc.vat_mode);
     const parentVatRate = Number(doc.vat_rate ?? 15);
     const sourceItems = doc.items?.length ? doc.items : [makeDefaultItem(doc)];
 
@@ -66,7 +68,7 @@ const TripInvoiceForm: React.FC<TripInvoiceFormProps> = ({ invoiceName, lang, on
         amount = grossOrNet / (1 + itemVatRate / 100);
         vatAmount = grossOrNet - amount;
         totalAmount = grossOrNet;
-      } else if (!noVat && vatMode === "Manual VAT") {
+      } else if (!noVat && vatMode === "Excluded") {
         vatAmount = amount * itemVatRate / 100;
         totalAmount = amount + vatAmount;
       }
@@ -84,6 +86,7 @@ const TripInvoiceForm: React.FC<TripInvoiceFormProps> = ({ invoiceName, lang, on
 
     return {
       ...doc,
+      vat_mode: vatMode as TripInvoice["vat_mode"],
       items,
       net_total: roundCurrency(items.reduce((sum, item) => sum + Number(item.amount || 0), 0)),
       vat_amount: roundCurrency(items.reduce((sum, item) => sum + Number(item.vat_amount || 0), 0)),
@@ -96,7 +99,22 @@ const TripInvoiceForm: React.FC<TripInvoiceFormProps> = ({ invoiceName, lang, on
       setLoading(true);
       try {
         const doc = await FrappeClient.getTripInvoice(invoiceName);
-        setInvoice(calculateInvoice(doc));
+        let nextDoc = doc;
+        if (doc?.trip) {
+          const trip = (await FrappeClient.getDoc("Trip", doc.trip)).message || {};
+          nextDoc = {
+            ...doc,
+            trip_value: trip.trip_value ?? doc.trip_value,
+            billing_mode: trip.billing_mode || doc.billing_mode,
+            vat_mode: normalizeVatMode(trip.vat_mode || doc.vat_mode) as TripInvoice["vat_mode"],
+            vat_rate: Number(trip.vat_rate ?? doc.vat_rate ?? 15),
+            trip_route: trip.trip_route || doc.trip_route,
+            from_location: trip.from_location || doc.from_location,
+            to_location: trip.to_location || doc.to_location,
+            distance: trip.distance ?? doc.distance,
+          };
+        }
+        setInvoice(calculateInvoice(nextDoc));
       } catch (err: any) {
         setMessage(err.message || "Failed to load Trip Invoice");
       } finally {
@@ -152,10 +170,15 @@ const TripInvoiceForm: React.FC<TripInvoiceFormProps> = ({ invoiceName, lang, on
       const saved = await FrappeClient.saveDoc('Trip Invoice', {
         ...calculated,
         doctype: "Trip Invoice",
+        vat_mode: normalizeVatMode(calculated.vat_mode),
         status: calculated.status === "Cancelled" ? calculated.status : "Ready",
         kashf_ready: 1,
       });
-      setInvoice(calculateInvoice(saved));
+      const ready = saved?.name ? await FrappeClient.markTripInvoiceReady(saved.name) : null;
+      const latest = saved?.name ? await FrappeClient.getTripInvoice(saved.name) : saved;
+      const nextInvoice = calculateInvoice({ ...latest, status: ready?.status || latest.status, kashf_ready: ready?.kashf_ready ?? latest.kashf_ready });
+      setInvoice(nextInvoice);
+      onSaved?.(nextInvoice);
       setMessage("Trip Invoice saved.");
     } catch (err: any) {
       setMessage(err.message || "Failed to save Trip Invoice");
@@ -228,14 +251,14 @@ const TripInvoiceForm: React.FC<TripInvoiceFormProps> = ({ invoiceName, lang, on
           <div className="grid grid-cols-2 gap-4">
             <label className="space-y-2">
               <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">VAT Mode</span>
-              <select value={invoice.vat_mode || 'Included'} onChange={(e) => updateInvoice({ vat_mode: e.target.value as TripInvoice['vat_mode'] })} className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 text-xs font-bold outline-none appearance-none">
+              <select value={normalizeVatMode(invoice.vat_mode)} onChange={(e) => updateInvoice({ vat_mode: e.target.value as TripInvoice['vat_mode'] })} className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 text-xs font-bold outline-none appearance-none">
                 <option value="Included">Included</option>
-                <option value="Manual VAT">Manual Add VAT</option>
+                <option value="Excluded">Excluded</option>
               </select>
             </label>
             <label className="space-y-2">
               <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">VAT Rate</span>
-              <input type="number" value={invoice.vat_rate ?? 15} onChange={(e) => updateInvoice({ vat_rate: Number(e.target.value) || 15 })} className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 text-xs font-bold outline-none" />
+              <input type="number" value={invoice.vat_rate ?? 15} readOnly className="w-full bg-slate-100 border border-slate-100 rounded-2xl px-4 py-3 text-xs font-bold outline-none text-slate-500" />
             </label>
           </div>
           <label className="space-y-2 block">
