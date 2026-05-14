@@ -37,6 +37,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [tripInvoice, setTripInvoice] = useState<TripInvoice | null>(null);
   const [showTripInvoiceForm, setShowTripInvoiceForm] = useState(false);
+  const [selectedPassengerIndexes, setSelectedPassengerIndexes] = useState<number[]>([]);
   const [isDirty, setIsDirty] = useState(false);
   const [queue, setQueue] = useState<ScanQueue>({ total: 0, processed: 0, scanning: false });
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | null }>({ message: '', type: null });
@@ -54,6 +55,11 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
   const hasTripInvoice = Boolean(formData.trip_invoice);
   const tripInvoiceAlreadyCreated = isFrappeCheckEnabled(formData.trip_invoice_created) || hasTripInvoice;
   const tripInvoiceSavedForPrint = Boolean(tripInvoice?.name && tripInvoice.status === "Ready" && Number(tripInvoice.grand_total || 0) > 0);
+  const allPassengersInvoiced = Boolean(
+    formData.passengers?.length &&
+    formData.passengers.every((p) => isFrappeCheckEnabled(p.trip_invoice_created) || Boolean(p.trip_invoice))
+  );
+  const tripSheetReadyForPrint = tripInvoiceSavedForPrint || allPassengersInvoiced;
   const visibleRoutes = getVisibleRoutes(routes, routeSearch) as Route[];
 
   useEffect(() => {
@@ -426,7 +432,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
 
   const printTripSheet = () => {
     if (!formData.name) return showToast(t.savePrintErr, "error");
-    if (!tripInvoiceSavedForPrint) return showToast("Save Trip Invoice before printing Trip.", "error");
+    if (!tripSheetReadyForPrint) return showToast("Save Trip Invoice before printing Trip.", "error");
     window.open(FrappeClient.getPrintUrl('Trip', formData.name, 'Trip'), '_blank');
   };
 
@@ -464,6 +470,78 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
       showToast(`Trip Invoice created: ${result.trip_invoice}`, "success");
     } catch (err: any) {
       showToast(err.message || "Error", "error");
+    } finally {
+      setInvoiceLoading(false);
+    }
+  };
+
+  const refreshTripAndInvoice = async (tripName: string) => {
+    const latestTrip = (await FrappeClient.getDoc("Trip", tripName)).message;
+    setFormData({
+      billing_mode: "Route Amount",
+      vat_rate: 15,
+      ...latestTrip,
+      vat_mode: normalizeVatMode(latestTrip.vat_mode) as Trip["vat_mode"],
+    });
+    formDataRef.current = latestTrip;
+    if (latestTrip.trip_invoice) {
+      const invoice = await FrappeClient.getTripInvoice(latestTrip.trip_invoice);
+      setTripInvoice(invoice);
+    }
+  };
+
+  const makePassengerInvoices = async (mode: "all" | "selected") => {
+    let sourceTrip = formData;
+    if (!sourceTrip.name || isDirty) {
+      const saved = await saveTripDocument(false);
+      if (!saved?.name) return;
+      sourceTrip = saved;
+    }
+
+    setInvoiceLoading(true);
+    try {
+      const fullTrip = (await FrappeClient.getDoc("Trip", sourceTrip.name!)).message;
+      const passengers = (fullTrip.passengers || []) as Passenger[];
+      const openPassengers = passengers
+        .map((p, idx) => ({ p, idx }))
+        .filter(({ p }) => p.name && !isFrappeCheckEnabled(p.trip_invoice_created) && !p.trip_invoice);
+      const selectedRows = mode === "all"
+        ? openPassengers
+        : openPassengers.filter(({ idx }) => selectedPassengerIndexes.includes(idx));
+
+      if (!selectedRows.length) {
+        showToast(mode === "all" ? "No uninvoiced passengers found." : "Select passengers first.", "error");
+        return;
+      }
+
+      const passengerResult = await FrappeClient.createTripInvoiceFromTrip(
+        sourceTrip.name!,
+        "Passenger",
+        selectedRows.map(({ p }) => p.name!).filter(Boolean)
+      );
+      const createdPassengerInvoices = passengerResult.trip_invoices || [];
+      for (const invoiceName of createdPassengerInvoices) {
+        await FrappeClient.markTripInvoiceReady(invoiceName);
+      }
+
+      const remainingCount = openPassengers.length - selectedRows.length;
+      let readyTripInvoice = "";
+      if (remainingCount > 0) {
+        const remainingResult = await FrappeClient.createTripInvoiceFromTrip(sourceTrip.name!, "Trip");
+        readyTripInvoice = remainingResult.trip_invoice;
+        if (readyTripInvoice) await FrappeClient.markTripInvoiceReady(readyTripInvoice);
+      }
+
+      await refreshTripAndInvoice(sourceTrip.name!);
+      setSelectedPassengerIndexes([]);
+      showToast(
+        remainingCount > 0
+          ? `Created ${createdPassengerInvoices.length} passenger invoice(s) and remaining Trip Invoice.`
+          : `Created ${createdPassengerInvoices.length} passenger invoice(s).`,
+        "success"
+      );
+    } catch (err: any) {
+      showToast(err.message || "Failed to generate passenger invoices.", "error");
     } finally {
       setInvoiceLoading(false);
     }
@@ -557,7 +635,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
         {/* Record Quick Actions */}
         {formData.name && (
             <div className="grid grid-cols-2 gap-4">
-                {tripInvoiceSavedForPrint && (
+                {tripSheetReadyForPrint && (
                     <button
                         onClick={printTripSheet}
                         className="bg-white text-slate-700 py-4 rounded-[1.5rem] border border-slate-100 flex items-center justify-center gap-2.5 active:scale-[0.98] transition-all shadow-sm group"
@@ -815,14 +893,32 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
             </section>
 
             <section className="bg-white p-7 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6 text-left rtl:text-right">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <div className="w-1.5 h-4 bg-emerald-500 rounded-full"></div>
-                        <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">{t.manifest} ({formData.passengers?.length || 0})</h4>
+                <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <div className="w-1.5 h-4 bg-emerald-500 rounded-full"></div>
+                            <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">{t.manifest} ({formData.passengers?.length || 0})</h4>
+                        </div>
+                        <button onClick={() => { setFormData(prev => ({ ...prev, passengers: [...(prev.passengers || []), { passenger_name: '', document_number: '', contact_no: '', source: 'MANUAL' }] })); setIsDirty(true); }} className="text-[9px] font-black text-blue-600 bg-blue-50 px-3.5 py-2 rounded-xl uppercase active:scale-95 transition-all">
+                            + {t.addRecord}
+                        </button>
                     </div>
-                    <button onClick={() => { setFormData(prev => ({ ...prev, passengers: [...(prev.passengers || []), { passenger_name: '', document_number: '', contact_no: '', source: 'MANUAL' }] })); setIsDirty(true); }} className="text-[9px] font-black text-blue-600 bg-blue-50 px-3.5 py-2 rounded-xl uppercase active:scale-95 transition-all">
-                        + {t.addRecord}
-                    </button>
+                    <div className="grid grid-cols-2 gap-3">
+                        <button
+                            onClick={() => makePassengerInvoices("all")}
+                            disabled={invoiceLoading || !(formData.passengers || []).length}
+                            className="bg-emerald-600 text-white px-4 py-3 rounded-2xl text-[9px] font-black uppercase disabled:opacity-40 active:scale-95 transition-all"
+                        >
+                            All Customers
+                        </button>
+                        <button
+                            onClick={() => makePassengerInvoices("selected")}
+                            disabled={invoiceLoading || selectedPassengerIndexes.length === 0}
+                            className="bg-violet-600 text-white px-4 py-3 rounded-2xl text-[9px] font-black uppercase disabled:opacity-40 active:scale-95 transition-all"
+                        >
+                            Generate Selected ({selectedPassengerIndexes.length})
+                        </button>
+                    </div>
                 </div>
                 <div className="space-y-4">
                     {(!formData.passengers || formData.passengers.length === 0) ? (
@@ -880,6 +976,26 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                                             }}
                                         />
                                         Invoice Customer
+                                    </label>
+                                    <label className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100 text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                                        <span className="flex items-center gap-3">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedPassengerIndexes.includes(idx)}
+                                                disabled={Boolean(p.trip_invoice) || isFrappeCheckEnabled(p.trip_invoice_created)}
+                                                onChange={(e) => {
+                                                    setSelectedPassengerIndexes(prev => (
+                                                        e.target.checked
+                                                            ? Array.from(new Set([...prev, idx]))
+                                                            : prev.filter((item) => item !== idx)
+                                                    ));
+                                                }}
+                                            />
+                                            Select for Invoice
+                                        </span>
+                                        {(p.trip_invoice || isFrappeCheckEnabled(p.trip_invoice_created)) && (
+                                            <span className="px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700 text-[8px]">Invoiced</span>
+                                        )}
                                     </label>
                                 </div>
                             </div>

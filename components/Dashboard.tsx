@@ -19,6 +19,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) 
   const [tripInvoiceStatus, setTripInvoiceStatus] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [openArchiveDates, setOpenArchiveDates] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const t = translations[lang];
   const fontClass = lang === 'ar' ? 'font-ar' : lang === 'ur' ? 'font-ur' : '';
@@ -29,10 +31,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) 
     try {
       const [tripsRes, routesRes, invoicesListRes] = await Promise.all([
         FrappeClient.getList('Trip', {}, [
-          'name', 'trip_status', 'from_location', 'to_location', 'departure', 'driver', 'assigned_vehicle', 'trip_route', 'distance', 'duration_minutes', 'trip_value', 'billing_mode', 'trip_invoice', 'trip_invoice_created'
-        ]),
+          'name', 'creation', 'trip_status', 'from_location', 'to_location', 'departure', 'driver', 'assigned_vehicle', 'trip_route', 'distance', 'duration_minutes', 'trip_value', 'billing_mode', 'trip_invoice', 'trip_invoice_created'
+        ], 500),
         FrappeClient.getList('Route', {}, ['name', 'from_place_full', 'to_place_full', 'distance', 'duration_minutes', 'return_route', 'route_value'], 500),
-        FrappeClient.getList('Trip Invoice', {}, ['name', 'trip', 'status', 'grand_total', 'invoice_passenger_name'], 20)
+        FrappeClient.getList('Trip Invoice', {}, ['name', 'creation', 'invoice_date', 'trip', 'status', 'grand_total', 'invoice_passenger_name'], 500)
       ]);
       const nextTrips = tripsRes.message || [];
       setTrips(nextTrips);
@@ -131,6 +133,38 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) 
   const getInvoiceStatusLabel = (trip: Trip) =>
     trip.trip_invoice ? (tripInvoiceStatus[trip.trip_invoice] || "Trip Invoice Draft") : "No Trip Invoice";
 
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const toDateKey = (value?: string) => {
+    if (!value) return "";
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? String(value).slice(0, 10) : parsed.toISOString().slice(0, 10);
+  };
+  const daysAgo = (dateKey: string) => {
+    const today = new Date(`${todayKey}T00:00:00`);
+    const date = new Date(`${dateKey}T00:00:00`);
+    return Math.floor((today.getTime() - date.getTime()) / 86400000);
+  };
+  const tripDateKey = (trip: Trip) => toDateKey(trip.departure || trip.creation);
+  const invoiceDateKey = (invoice: TripInvoice) => toDateKey(invoice.invoice_date || invoice.creation);
+  const todayTrips = trips.filter((trip) => tripDateKey(trip) === todayKey);
+  const recentTrips = trips.filter((trip) => {
+    const age = daysAgo(tripDateKey(trip));
+    return age > 0 && age <= 2;
+  });
+  const archivedTrips = trips.filter((trip) => daysAgo(tripDateKey(trip)) > 2);
+  const todayInvoices = tripInvoices.filter((invoice) => invoiceDateKey(invoice) === todayKey);
+  const recentInvoices = tripInvoices.filter((invoice) => {
+    const age = daysAgo(invoiceDateKey(invoice));
+    return age > 0 && age <= 2;
+  });
+  const archivedInvoices = tripInvoices.filter((invoice) => daysAgo(invoiceDateKey(invoice)) > 2);
+  const archivedDateKeys = Array.from(new Set([
+    ...archivedTrips.map(tripDateKey),
+    ...archivedInvoices.map(invoiceDateKey),
+  ])).filter(Boolean).sort().reverse();
+  const activeTrips = [...todayTrips, ...recentTrips];
+  const activeInvoices = [...todayInvoices, ...recentInvoices];
+
   if (selectedInvoiceName) {
     return (
       <TripInvoiceForm
@@ -149,21 +183,36 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) 
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-black text-slate-900 tracking-tight">{t.activeFleet}</h2>
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">{t.liveLogs}</p>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Today active, recent kept close, older archived</p>
         </div>
         <button onClick={() => fetchData()} className="p-3 bg-white shadow-sm border border-slate-100 rounded-2xl text-slate-400 hover:text-blue-600 transition-all active:scale-90">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
         </button>
       </div>
 
-      {tripInvoices.length > 0 && (
+      <section className="grid grid-cols-3 gap-3">
+        <div className="bg-white border border-slate-100 rounded-2xl p-4 text-center">
+          <p className="text-[8px] font-black text-slate-300 uppercase">Today Trips</p>
+          <p className="text-lg font-black text-slate-900">{todayTrips.length}</p>
+        </div>
+        <div className="bg-white border border-slate-100 rounded-2xl p-4 text-center">
+          <p className="text-[8px] font-black text-slate-300 uppercase">Today Invoices</p>
+          <p className="text-lg font-black text-slate-900">{todayInvoices.length}</p>
+        </div>
+        <button onClick={() => setArchiveOpen(prev => !prev)} className="bg-slate-900 text-white rounded-2xl p-4 text-center active:scale-95 transition-all">
+          <p className="text-[8px] font-black text-white/50 uppercase">Archived</p>
+          <p className="text-lg font-black">{archivedTrips.length + archivedInvoices.length}</p>
+        </button>
+      </section>
+
+      {activeInvoices.length > 0 && (
         <section className="bg-white border border-slate-100 p-5 rounded-[2rem] shadow-sm space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Trip Invoices</h3>
-            <span className="text-[9px] font-black text-slate-300 uppercase">{tripInvoices.length}</span>
+            <span className="text-[9px] font-black text-slate-300 uppercase">{activeInvoices.length}</span>
           </div>
           <div className="space-y-2">
-            {tripInvoices.map((invoice) => (
+            {activeInvoices.map((invoice) => (
               <button
                 key={invoice.name}
                 onClick={() => invoice.name && setSelectedInvoiceName(invoice.name)}
@@ -185,6 +234,51 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) 
         </section>
       )}
 
+      {archiveOpen && (
+        <section className="bg-white border border-slate-100 p-5 rounded-[2rem] shadow-sm space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Archive</h3>
+            <span className="text-[9px] font-black text-slate-300 uppercase">older than 2 days</span>
+          </div>
+          <div className="space-y-3">
+            {archivedDateKeys.length === 0 ? (
+              <div className="bg-slate-50 rounded-2xl p-4 text-center text-[10px] font-black text-slate-300 uppercase">No archived records</div>
+            ) : archivedDateKeys.map((dateKey) => {
+              const dateTrips = archivedTrips.filter((trip) => tripDateKey(trip) === dateKey);
+              const dateInvoices = archivedInvoices.filter((invoice) => invoiceDateKey(invoice) === dateKey);
+              const open = Boolean(openArchiveDates[dateKey]);
+              return (
+                <div key={dateKey} className="border border-slate-100 rounded-2xl overflow-hidden">
+                  <button
+                    onClick={() => setOpenArchiveDates(prev => ({ ...prev, [dateKey]: !prev[dateKey] }))}
+                    className="w-full bg-slate-50 px-4 py-3 flex items-center justify-between text-left rtl:text-right"
+                  >
+                    <span className="text-[10px] font-black text-slate-800 uppercase">{dateKey}</span>
+                    <span className="text-[9px] font-black text-slate-400 uppercase">{dateTrips.length} trips / {dateInvoices.length} invoices</span>
+                  </button>
+                  {open && (
+                    <div className="p-3 space-y-2">
+                      {dateTrips.map((trip) => (
+                        <button key={trip.name} onClick={() => onEditTrip(trip)} className="w-full bg-white border border-slate-100 rounded-xl p-3 text-left rtl:text-right">
+                          <p className="text-[10px] font-black text-slate-900 truncate">{trip.name}</p>
+                          <p className="text-[9px] font-bold text-slate-400 truncate">{trip.from_location || "-"} - {trip.to_location || "-"}</p>
+                        </button>
+                      ))}
+                      {dateInvoices.map((invoice) => (
+                        <button key={invoice.name} onClick={() => invoice.name && setSelectedInvoiceName(invoice.name)} className="w-full bg-violet-50 border border-violet-100 rounded-xl p-3 text-left rtl:text-right">
+                          <p className="text-[10px] font-black text-violet-900 truncate">{invoice.name}</p>
+                          <p className="text-[9px] font-bold text-violet-500 truncate">{invoice.trip || invoice.invoice_passenger_name || "Trip Invoice"} | {invoice.grand_total ?? 0}</p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       <div className="space-y-4">
         {loading ? (
           <div className="py-20 text-center space-y-4">
@@ -197,12 +291,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) 
              <p className="text-[10px] text-red-400 mb-4">{error}</p>
              <button onClick={() => fetchData()} className="px-6 py-2 bg-red-600 text-white rounded-xl text-[10px] font-black uppercase">Retry</button>
            </div>
-        ) : trips.length === 0 ? (
+        ) : activeTrips.length === 0 ? (
           <div className="py-16 text-center bg-white border-2 border-dashed border-slate-100 rounded-[2.5rem]">
             <p className="text-xs font-black text-slate-300 uppercase">{t.emptyLog}</p>
           </div>
         ) : (
-          trips.map((trip) => (
+          activeTrips.map((trip) => (
             <div key={trip.name} className="bg-white border border-slate-100 p-6 rounded-[2.5rem] shadow-sm relative transition-all hover:shadow-xl hover:shadow-slate-200/50 group">
               <div className="flex justify-between items-start mb-6">
                 <div onClick={() => onEditTrip(trip)} className="cursor-pointer">

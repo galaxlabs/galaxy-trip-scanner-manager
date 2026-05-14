@@ -215,8 +215,14 @@ export class FrappeClient {
   }
 }
 
-  static async createTripInvoiceFromTrip(tripName: string, invoiceMode: "Trip" | "Passenger" = "Trip") {
-    const res = await this.fetch(CREATE_TRIP_INVOICE_METHOD, { trip_name: tripName, invoice_mode: invoiceMode }, { method: "POST" });
+  static async createTripInvoiceFromTrip(
+    tripName: string,
+    invoiceMode: "Trip" | "Passenger" = "Trip",
+    passengerRows?: string[]
+  ) {
+    const params: Record<string, any> = { trip_name: tripName, invoice_mode: invoiceMode };
+    if (passengerRows?.length) params.passenger_rows = JSON.stringify(passengerRows);
+    const res = await this.fetch(CREATE_TRIP_INVOICE_METHOD, params, { method: "POST" });
     return res.message;
   }
 

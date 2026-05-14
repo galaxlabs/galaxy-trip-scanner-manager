@@ -3,6 +3,7 @@ export type Language = 'en' | 'ar' | 'ur';
 
 export interface Trip {
   name?: string;
+  creation?: string;
   driver?: string;
   assigned_vehicle?: string;
   id_no?: string;
@@ -41,6 +42,8 @@ export interface Trip {
 }
 
 export interface Passenger {
+  name?: string;
+  creation?: string;
   passenger_name: string;
   id_no?: string;
   mobile_no?: string;
@@ -55,10 +58,13 @@ export interface Passenger {
   passenger_master?: string;
   source?: string;
   is_auto_filled?: number;
+  trip_invoice_created?: boolean | number | string;
+  trip_invoice?: string;
 }
 
 export interface TripInvoice {
   name?: string;
+  creation?: string;
   trip?: string;
   doctype?: "Trip Invoice";
   company?: string;
@@ -68,6 +74,7 @@ export interface TripInvoice {
   kashf_sent?: boolean | number | string;
   invoice_passenger_name?: string;
   invoice_passenger_mobile?: string;
+  invoice_date?: string;
   trip_route?: string;
   from_location?: string;
   to_location?: string;
