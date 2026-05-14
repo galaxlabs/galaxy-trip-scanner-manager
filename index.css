@@ -5,10 +5,22 @@
 :root {
   --font-en: 'Inter', sans-serif;
   --font-rtl: 'Noto Sans Arabic', sans-serif;
+  --ink: #12201f;
+  --ink-soft: #243634;
+  --paper: #f5f1e8;
+  --paper-soft: #fffaf0;
+  --line: #e0d6c6;
+  --amber: #d88716;
+  --amber-dark: #a95e0b;
+  --cyan: #0f7f8f;
+  --mint: #d7efe6;
+  --danger: #b42318;
+  --danger-soft: #fff0ed;
 }
 
 body {
   font-family: var(--font-en);
+  background: var(--ink);
 }
 
 .font-ar,
@@ -21,4 +33,61 @@ body {
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+}
+
+@layer components {
+  .app-shell {
+    background:
+      radial-gradient(circle at top left, rgba(216, 135, 22, 0.16), transparent 34%),
+      linear-gradient(180deg, var(--paper) 0%, #eee8db 100%);
+  }
+
+  .app-header {
+    background:
+      linear-gradient(135deg, var(--ink) 0%, #172b29 58%, #263a2c 100%);
+    color: var(--paper-soft);
+  }
+
+  .surface-panel {
+    background: rgba(255, 250, 240, 0.94);
+    border: 1px solid var(--line);
+    box-shadow: 0 18px 45px rgba(18, 32, 31, 0.12);
+  }
+
+  .surface-muted {
+    background: rgba(245, 241, 232, 0.9);
+    border: 1px solid var(--line);
+  }
+
+  .brand-action {
+    background: linear-gradient(135deg, var(--amber), var(--amber-dark));
+    color: white;
+    box-shadow: 0 14px 28px rgba(216, 135, 22, 0.28);
+  }
+
+  .brand-action:disabled {
+    opacity: 0.55;
+    box-shadow: none;
+  }
+
+  .ink-action {
+    background: var(--ink);
+    color: var(--paper-soft);
+  }
+
+  .filter-card {
+    background: rgba(255, 250, 240, 0.94);
+    border: 1px solid var(--line);
+    color: var(--ink);
+  }
+
+  .filter-card-active {
+    background: linear-gradient(135deg, var(--ink), var(--ink-soft));
+    color: var(--paper-soft);
+    box-shadow: 0 16px 30px rgba(18, 32, 31, 0.18);
+  }
+
+  .data-accent {
+    color: var(--cyan);
+  }
 }

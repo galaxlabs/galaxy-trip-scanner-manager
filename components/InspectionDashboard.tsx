@@ -3,6 +3,8 @@ import { Language, VehicleInspectionLog } from '../types';
 import { FrappeClient } from '../services/frappe';
 import { translations } from '../translations';
 
+type TimeFilter = 'today' | 'recent' | 'archived';
+
 interface InspectionDashboardProps {
   onCreateNew: (initialData?: Partial<VehicleInspectionLog>) => void;
   onEditInspection: (log: VehicleInspectionLog) => void;
@@ -13,6 +15,7 @@ const InspectionDashboard: React.FC<InspectionDashboardProps> = ({ onCreateNew, 
   const [logs, setLogs] = useState<VehicleInspectionLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [inspectionFilter, setInspectionFilter] = useState<TimeFilter>('today');
   const t = translations[lang];
   const fontClass = lang === 'ar' ? 'font-ar' : lang === 'ur' ? 'font-ur' : '';
 
@@ -22,11 +25,12 @@ const InspectionDashboard: React.FC<InspectionDashboardProps> = ({ onCreateNew, 
     try {
       const res = await FrappeClient.getList('Vehicle Inspection Log', {}, [
         'name',
+        'creation',
         'inspection_date',
         'driver',
         'vehicle',
         'modified',
-      ]);
+      ], 500);
       setLogs(res.message || []);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch inspection logs');
@@ -39,12 +43,38 @@ const InspectionDashboard: React.FC<InspectionDashboardProps> = ({ onCreateNew, 
     fetchLogs();
   }, []);
 
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const toDateKey = (value?: string) => {
+    if (!value) return "";
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? String(value).slice(0, 10) : parsed.toISOString().slice(0, 10);
+  };
+  const daysAgo = (dateKey: string) => {
+    const today = new Date(`${todayKey}T00:00:00`);
+    const date = new Date(`${dateKey}T00:00:00`);
+    return Math.floor((today.getTime() - date.getTime()) / 86400000);
+  };
+  const logDateKey = (log: VehicleInspectionLog) => toDateKey(log.inspection_date || log.creation || log.modified);
+  const todayLogs = logs.filter((log) => logDateKey(log) === todayKey);
+  const recentLogs = logs.filter((log) => {
+    const age = daysAgo(logDateKey(log));
+    return age > 0 && age <= 2;
+  });
+  const archivedLogs = logs.filter((log) => daysAgo(logDateKey(log)) > 2);
+  const visibleLogs = inspectionFilter === 'today' ? todayLogs : inspectionFilter === 'recent' ? recentLogs : archivedLogs;
+  const filterTitle = inspectionFilter === 'today' ? t.todayInspections : inspectionFilter === 'recent' ? t.recentInspections : t.archivedInspections;
+  const filterCards = [
+    { key: 'today' as const, label: t.today, count: todayLogs.length },
+    { key: 'recent' as const, label: t.recent, count: recentLogs.length },
+    { key: 'archived' as const, label: t.archived, count: archivedLogs.length },
+  ];
+
   return (
     <div className={`p-4 space-y-6 ${fontClass}`}>
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-black text-slate-900 tracking-tight">{t.activeInspections}</h2>
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">{t.inspectionLogs}</p>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">{filterTitle}</p>
         </div>
         <button
           onClick={fetchLogs}
@@ -54,6 +84,22 @@ const InspectionDashboard: React.FC<InspectionDashboardProps> = ({ onCreateNew, 
         </button>
       </div>
 
+      <section className="grid grid-cols-3 gap-3">
+        {filterCards.map((card) => {
+          const isActive = inspectionFilter === card.key;
+          return (
+            <button
+              key={card.key}
+              onClick={() => setInspectionFilter(card.key)}
+              className={`rounded-2xl p-4 text-center transition-all active:scale-95 ${isActive ? 'filter-card-active' : 'filter-card'}`}
+            >
+              <p className={`text-[8px] font-black uppercase ${isActive ? 'text-white/50' : 'text-slate-300'}`}>{card.label}</p>
+              <p className="text-lg font-black">{card.count}</p>
+            </button>
+          );
+        })}
+      </section>
+
       <div className="space-y-4">
         {loading ? (
           <div className="py-20 text-center space-y-4">
@@ -62,16 +108,16 @@ const InspectionDashboard: React.FC<InspectionDashboardProps> = ({ onCreateNew, 
           </div>
         ) : error ? (
           <div className="py-12 text-center text-red-500 bg-red-50 rounded-[2.5rem] p-6 border border-red-100">
-            <p className="text-xs font-black uppercase mb-1">Error</p>
+            <p className="text-xs font-black uppercase mb-1">{t.error}</p>
             <p className="text-[10px] text-red-400 mb-4">{error}</p>
-            <button onClick={fetchLogs} className="px-6 py-2 bg-red-600 text-white rounded-xl text-[10px] font-black uppercase">Retry</button>
+            <button onClick={fetchLogs} className="px-6 py-2 bg-[var(--danger)] text-white rounded-xl text-[10px] font-black uppercase">{t.retry}</button>
           </div>
-        ) : logs.length === 0 ? (
+        ) : visibleLogs.length === 0 ? (
           <div className="py-16 text-center bg-white border-2 border-dashed border-slate-100 rounded-[2.5rem]">
-            <p className="text-xs font-black text-slate-300 uppercase">{t.emptyLog}</p>
+            <p className="text-xs font-black text-slate-300 uppercase">{t.noRecords.replace('{label}', filterTitle)}</p>
           </div>
         ) : (
-          logs.map((log) => (
+          visibleLogs.map((log) => (
             <div key={log.name} className="bg-white border border-slate-100 p-6 rounded-[2.5rem] shadow-sm transition-all hover:shadow-xl hover:shadow-slate-200/50">
               <div className="flex items-center justify-between gap-3 mb-5">
                 <div onClick={() => onEditInspection(log)} className="cursor-pointer">
@@ -90,7 +136,7 @@ const InspectionDashboard: React.FC<InspectionDashboardProps> = ({ onCreateNew, 
                     onClick={() => onEditInspection(log)}
                     className="px-4 py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all"
                   >
-                    Edit
+                    {t.edit}
                   </button>
                 </div>
               </div>

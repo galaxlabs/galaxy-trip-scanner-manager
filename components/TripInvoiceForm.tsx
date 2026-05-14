@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Language, TripInvoice } from '../types';
 import { FrappeClient } from '../services/frappe';
+import { translations } from '../translations';
 
 interface TripInvoiceFormProps {
   invoiceName: string;
@@ -14,6 +15,7 @@ const TripInvoiceForm: React.FC<TripInvoiceFormProps> = ({ invoiceName, lang, on
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const t = translations[lang];
   const fontClass = lang === 'ar' ? 'font-ar' : lang === 'ur' ? 'font-ur' : '';
   const hasPrintableInvoice = Boolean(invoice?.name && invoice.status === "Ready" && Number(invoice?.grand_total || 0) > 0);
 
@@ -220,7 +222,7 @@ const TripInvoiceForm: React.FC<TripInvoiceFormProps> = ({ invoiceName, lang, on
           <svg className={`w-6 h-6 ${lang !== 'en' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7"/></svg>
         </button>
         <div className="flex-1 px-4 text-center min-w-0">
-          <h2 className="text-[10px] font-black text-slate-300 uppercase tracking-widest leading-none mb-1">Trip Invoice</h2>
+          <h2 className="text-[10px] font-black text-slate-300 uppercase tracking-widest leading-none mb-1">{t.tripInvoices}</h2>
           <p className="text-[11px] font-black text-slate-900 truncate uppercase tracking-tight">{invoice.name}</p>
         </div>
         <div className="w-10" />
@@ -235,25 +237,25 @@ const TripInvoiceForm: React.FC<TripInvoiceFormProps> = ({ invoiceName, lang, on
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
         <section className="bg-white p-7 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-5">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-black text-slate-900 uppercase tracking-tighter">Details</h3>
-            <span className="px-3 py-1.5 rounded-xl text-[9px] font-black uppercase bg-slate-100 text-slate-600">{invoice.status || "Draft"}</span>
+            <h3 className="text-sm font-black text-slate-900 uppercase tracking-tighter">{t.details}</h3>
+            <span className="px-3 py-1.5 rounded-xl text-[9px] font-black uppercase bg-slate-100 text-slate-600">{invoice.status || t.draft}</span>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <label className="space-y-2">
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Passenger</span>
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{t.passenger}</span>
               <input value={invoice.invoice_passenger_name || ''} onChange={(e) => updateInvoice({ invoice_passenger_name: e.target.value })} className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 text-xs font-bold outline-none" />
             </label>
             <label className="space-y-2">
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Mobile</span>
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{t.mobile}</span>
               <input value={invoice.invoice_passenger_mobile || ''} onChange={(e) => updateInvoice({ invoice_passenger_mobile: e.target.value })} className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 text-xs font-bold outline-none" />
             </label>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <label className="space-y-2">
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">VAT Mode</span>
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{t.vatMode}</span>
               <select value={normalizeVatMode(invoice.vat_mode)} onChange={(e) => updateInvoice({ vat_mode: e.target.value as TripInvoice['vat_mode'] })} className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 text-xs font-bold outline-none appearance-none">
-                <option value="Included">Included</option>
-                <option value="Excluded">Excluded</option>
+                <option value="Included">{t.included}</option>
+                <option value="Excluded">{t.excluded}</option>
               </select>
             </label>
             <label className="space-y-2">

@@ -5,13 +5,14 @@ import { FrappeClient } from './services/frappe';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import TripForm from './components/TripForm';
+import TripInvoiceList from './components/TripInvoiceList';
 import InspectionDashboard from './components/InspectionDashboard';
 import VehicleInspectionForm from './components/VehicleInspectionForm';
 import { Layout } from './components/Layout';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
-  const [activeModule, setActiveModule] = useState<'trip' | 'inspection'>('trip');
+  const [activeModule, setActiveModule] = useState<'trip' | 'trip_invoice' | 'inspection'>('trip');
   const [currentView, setCurrentView] = useState<'dashboard' | 'create' | 'edit'>('dashboard');
   const [selectedTrip, setSelectedTrip] = useState<Partial<Trip> | null>(null);
   const [selectedInspection, setSelectedInspection] = useState<Partial<VehicleInspectionLog> | null>(null);
@@ -20,7 +21,13 @@ const App: React.FC = () => {
   useEffect(() => {
     const savedUser = localStorage.getItem('frappe_user');
     const savedLang = localStorage.getItem('app_lang') as Language;
-    if (savedUser) setUser(JSON.parse(savedUser));
+    if (savedUser) {
+      try {
+        setUser(JSON.parse(savedUser));
+      } catch {
+        localStorage.removeItem('frappe_user');
+      }
+    }
     if (savedLang) setLang(savedLang);
   }, []);
 
@@ -70,8 +77,13 @@ const App: React.FC = () => {
       onLogout={handleLogout} 
       onLangChange={handleLangChange}
       onNavigate={(view) => {
-        if (view === 'switch_module') {
-          const nextModule = activeModule === 'trip' ? 'inspection' : 'trip';
+        if (view === 'trips' || view === 'trip_invoices' || view === 'inspections' || view === 'switch_module') {
+          const nextModule =
+            view === 'trip_invoices'
+              ? 'trip_invoice'
+              : view === 'inspections' || view === 'switch_module'
+                ? 'inspection'
+                : 'trip';
           setActiveModule(nextModule);
           setCurrentView('dashboard');
           setSelectedTrip(null);
@@ -82,8 +94,11 @@ const App: React.FC = () => {
         if (view === 'create') {
           if (activeModule === 'trip') {
             startNewTrip();
-          } else {
+          } else if (activeModule === 'inspection') {
             startNewInspection();
+          } else {
+            setActiveModule('trip');
+            startNewTrip();
           }
         } else {
           setCurrentView('dashboard');
@@ -115,6 +130,10 @@ const App: React.FC = () => {
           }}
           onSave={() => setCurrentView('dashboard')}
         />
+      )}
+
+      {activeModule === 'trip_invoice' && currentView === 'dashboard' && (
+        <TripInvoiceList lang={lang} />
       )}
 
       {activeModule === 'inspection' && currentView === 'dashboard' && (

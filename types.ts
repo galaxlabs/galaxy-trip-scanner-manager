@@ -148,6 +148,8 @@ export interface VehicleInspectionItem {
 
 export interface VehicleInspectionLog {
   name?: string;
+  creation?: string;
+  modified?: string;
   naming_series?: string;
   inspection_no?: string;
   inspection_date?: string;

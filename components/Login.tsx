@@ -37,33 +37,33 @@ const Login: React.FC<LoginProps> = ({ onLogin, lang, onLangChange }) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 max-w-md mx-auto relative" dir={isRtl ? 'rtl' : 'ltr'}>
+    <div className="min-h-screen app-shell flex flex-col items-center justify-center p-6 max-w-md mx-auto relative" dir={isRtl ? 'rtl' : 'ltr'}>
       {/* Top Lang Selector */}
       <div className="absolute top-8 right-8 flex gap-2">
         {(['en', 'ar', 'ur'] as Language[]).map(l => (
             <button 
                 key={l}
                 onClick={() => onLangChange(l)}
-                className={`text-[10px] font-black px-3 py-1.5 rounded-full transition-all ${lang === l ? 'bg-blue-600 text-white shadow-lg' : 'bg-white text-slate-400 border border-slate-100'}`}
+                className={`text-[10px] font-black px-3 py-1.5 rounded-full transition-all ${lang === l ? 'brand-action' : 'surface-panel text-[var(--ink-soft)]'}`}
             >
                 {l.toUpperCase()}
             </button>
         ))}
       </div>
 
-      <div className="w-24 h-24 bg-blue-600 rounded-[2.5rem] flex items-center justify-center text-white text-5xl font-black shadow-2xl mb-8 relative rotate-3">
+      <div className="w-24 h-24 app-header rounded-[2.5rem] flex items-center justify-center text-[var(--paper-soft)] text-5xl font-black shadow-2xl mb-8 relative rotate-3">
         G
-        <div className="absolute -top-2 -right-2 w-6 h-6 bg-emerald-500 rounded-full border-4 border-white animate-pulse"></div>
+        <div className="absolute -top-2 -right-2 w-6 h-6 bg-[var(--amber)] rounded-full border-4 border-[var(--paper-soft)] animate-pulse"></div>
       </div>
       
       <div className="text-center mb-10">
-        <h2 className="text-3xl font-black text-slate-900 tracking-tight">{t.loginTitle}</h2>
-        <p className="text-slate-500 mt-2 font-medium">{t.loginSubtitle}</p>
+        <h2 className="text-3xl font-black text-[var(--ink)] tracking-tight">{t.loginTitle}</h2>
+        <p className="text-[var(--ink-soft)]/70 mt-2 font-medium">{t.loginSubtitle}</p>
       </div>
 
       <div className="w-full space-y-6">
         {error && (
-          <div className="bg-red-50 border border-red-100 p-5 rounded-3xl animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="bg-[var(--danger-soft)] border border-red-100 p-5 rounded-3xl animate-in fade-in slide-in-from-top-4 duration-300">
             <div className="flex items-start gap-3">
               <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
                 <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd"/></svg>
@@ -76,7 +76,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, lang, onLangChange }) => {
           </div>
         )}
         
-        <form onSubmit={handleSignIn} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-200/50 space-y-6">
+        <form onSubmit={handleSignIn} className="surface-panel p-8 rounded-[2.5rem] space-y-6">
           <div className="space-y-4">
             <div className="relative">
               <div className={`absolute top-1/2 -translate-y-1/2 ${isRtl ? 'right-4' : 'left-4'} text-slate-400`}>
@@ -88,7 +88,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, lang, onLangChange }) => {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
-                className={`w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 ${isRtl ? 'pr-12 pl-4' : 'pl-12 pr-4'} text-sm font-bold text-slate-800 outline-none focus:ring-4 focus:ring-blue-100 transition-all`}
+                className={`w-full surface-muted rounded-2xl py-4 ${isRtl ? 'pr-12 pl-4' : 'pl-12 pr-4'} text-sm font-bold text-[var(--ink)] outline-none focus:ring-4 focus:ring-[var(--amber)]/20 transition-all`}
               />
             </div>
 
@@ -102,7 +102,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, lang, onLangChange }) => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className={`w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 ${isRtl ? 'pr-12 pl-4' : 'pl-12 pr-4'} text-sm font-bold text-slate-800 outline-none focus:ring-4 focus:ring-blue-100 transition-all`}
+                className={`w-full surface-muted rounded-2xl py-4 ${isRtl ? 'pr-12 pl-4' : 'pl-12 pr-4'} text-sm font-bold text-[var(--ink)] outline-none focus:ring-4 focus:ring-[var(--amber)]/20 transition-all`}
               />
             </div>
           </div>
@@ -110,7 +110,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, lang, onLangChange }) => {
           <button
             type="submit"
             disabled={loading || !username || !password}
-            className="w-full bg-slate-900 text-white py-5 rounded-2xl font-bold text-lg shadow-lg shadow-slate-300 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-3 group"
+            className="w-full ink-action py-5 rounded-2xl font-bold text-lg shadow-lg shadow-black/15 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-3 group"
           >
             {loading ? (
               <>
