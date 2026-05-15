@@ -5,6 +5,11 @@ import { FrappeClient, isFrappeCheckEnabled } from '../services/frappe';
 import { translations } from '../translations';
 
 type TimeFilter = 'today' | 'recent' | 'archived';
+type TripInvoiceMeta = {
+  status?: string;
+  kashf_ready?: unknown;
+  grand_total?: number;
+};
 
 interface DashboardProps {
   onCreateNew: (initialData?: Partial<Trip>) => void;
@@ -15,8 +20,9 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) => {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [routes, setRoutes] = useState<Route[]>([]);
-  const [tripInvoiceStatus, setTripInvoiceStatus] = useState<Record<string, string>>({});
+  const [tripInvoiceMeta, setTripInvoiceMeta] = useState<Record<string, TripInvoiceMeta>>({});
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tripFilter, setTripFilter] = useState<TimeFilter>('today');
@@ -42,18 +48,22 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) 
         const invoicesRes = await FrappeClient.getList(
           'Trip Invoice',
           [['name', 'in', invoiceNames]],
-          ['name', 'status', 'kashf_ready'],
+          ['name', 'status', 'kashf_ready', 'grand_total'],
           invoiceNames.length
         );
-        const statusMap = Object.fromEntries(
+        const metaMap = Object.fromEntries(
           (invoicesRes.message || []).map((invoice: any) => [
             invoice.name,
-            invoice.status === 'Ready' && isFrappeCheckEnabled(invoice.kashf_ready) ? 'Ready for Kashf' : invoice.status,
+            {
+              status: invoice.status,
+              kashf_ready: invoice.kashf_ready,
+              grand_total: invoice.grand_total,
+            },
           ])
         );
-        setTripInvoiceStatus(statusMap);
+        setTripInvoiceMeta(metaMap);
       } else {
-        setTripInvoiceStatus({});
+        setTripInvoiceMeta({});
       }
     } catch (err: any) {
       setError(err.message || "Failed to fetch data");
@@ -126,8 +136,45 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) 
     }
   };
 
+  const handleCreateTripInvoice = async (e: React.MouseEvent, trip: Trip) => {
+    e.stopPropagation();
+    if (!trip.name || trip.trip_invoice) return;
+    setActionLoading(`invoice:${trip.name}`);
+    try {
+      await FrappeClient.createTripInvoiceFromTrip(trip.name);
+      await fetchData();
+      setActiveMenu(null);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handlePrintTrip = (e: React.MouseEvent, trip: Trip) => {
+    e.stopPropagation();
+    if (!trip.name) return;
+    setActiveMenu(null);
+    window.open(FrappeClient.getPrintUrl('Trip', trip.name, 'Trip'), '_blank');
+  };
+
+  const handlePrintInvoice = (e: React.MouseEvent, trip: Trip) => {
+    e.stopPropagation();
+    if (!trip.trip_invoice) return;
+    setActiveMenu(null);
+    window.open(FrappeClient.getPrintUrl('Trip Invoice', trip.trip_invoice, 'Trip Invoice POS'), '_blank');
+  };
+
+  const getInvoiceMeta = (trip: Trip) => trip.trip_invoice ? tripInvoiceMeta[trip.trip_invoice] : undefined;
+  const canPrintInvoice = (trip: Trip) => {
+    const meta = getInvoiceMeta(trip);
+    return Boolean(trip.trip_invoice && meta?.status === 'Ready' && Number(meta?.grand_total || 0) > 0);
+  };
+
   const getInvoiceStatusLabel = (trip: Trip) =>
-    trip.trip_invoice ? (tripInvoiceStatus[trip.trip_invoice] === 'Ready for Kashf' ? t.readyForKashf : (tripInvoiceStatus[trip.trip_invoice] || t.tripInvoiceDraft)) : t.noTripInvoice;
+    trip.trip_invoice
+      ? (getInvoiceMeta(trip)?.status === 'Ready' && isFrappeCheckEnabled(getInvoiceMeta(trip)?.kashf_ready) ? t.readyForKashf : (getInvoiceMeta(trip)?.status || t.tripInvoiceDraft))
+      : t.noTripInvoice;
 
   const todayKey = new Date().toISOString().slice(0, 10);
   const toDateKey = (value?: string) => {
@@ -221,6 +268,36 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) 
                     
                     {activeMenu === trip.name && (
                         <div className={`absolute top-12 z-[100] w-56 bg-white border border-slate-100 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 ring-1 ring-black/5 ${lang === 'en' ? 'right-0 origin-top-right' : 'left-0 origin-top-left'}`}>
+                            <button onClick={(e) => { e.stopPropagation(); setActiveMenu(null); onEditTrip(trip); }} className="w-full text-left rtl:text-right px-6 py-4 text-[10px] font-black text-slate-600 hover:bg-slate-50 flex items-center gap-3 uppercase transition-colors">
+                                <div className="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center text-slate-600">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                </div>
+                                {t.openTrip}
+                            </button>
+                            {!trip.trip_invoice && (
+                              <button onClick={(e) => handleCreateTripInvoice(e, trip)} disabled={actionLoading === `invoice:${trip.name}`} className="w-full text-left rtl:text-right px-6 py-4 text-[10px] font-black text-slate-600 hover:bg-slate-50 flex items-center gap-3 border-t border-slate-50 uppercase transition-colors disabled:opacity-50">
+                                  <div className="w-8 h-8 rounded-xl bg-violet-50 flex items-center justify-center text-violet-600">
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12h6m-6 4h6M9 8h6M5 4h14v16H5z"/></svg>
+                                  </div>
+                                  {actionLoading === `invoice:${trip.name}` ? t.creating : t.createTripInvoice}
+                              </button>
+                            )}
+                            {canPrintInvoice(trip) && (
+                              <>
+                                <button onClick={(e) => handlePrintTrip(e, trip)} className="w-full text-left rtl:text-right px-6 py-4 text-[10px] font-black text-slate-600 hover:bg-slate-50 flex items-center gap-3 border-t border-slate-50 uppercase transition-colors">
+                                    <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2z"/></svg>
+                                    </div>
+                                    {t.printTrip}
+                                </button>
+                                <button onClick={(e) => handlePrintInvoice(e, trip)} className="w-full text-left rtl:text-right px-6 py-4 text-[10px] font-black text-slate-600 hover:bg-slate-50 flex items-center gap-3 border-t border-slate-50 uppercase transition-colors">
+                                    <div className="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 17v-6h6v6m2 4H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z"/></svg>
+                                    </div>
+                                    {t.printInvoice}
+                                </button>
+                              </>
+                            )}
                             <button onClick={(e) => handleDuplicate(e, trip)} className="w-full text-left rtl:text-right px-6 py-4 text-[10px] font-black text-slate-600 hover:bg-slate-50 flex items-center gap-3 uppercase transition-colors">
                                 <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2"/></svg>
