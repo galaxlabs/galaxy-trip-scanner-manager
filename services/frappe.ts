@@ -175,6 +175,8 @@ export class FrappeClient {
     clean.passengers = clean.passengers.map((p: any) => {
       const row: any = { ...(p || {}) };
 
+      delete row.expiry_date;
+
       // remove internal + parent linkage fields (Frappe will rebuild)
       [
         "name","owner","creation","modified","modified_by","docstatus","idx",

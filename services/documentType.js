@@ -109,7 +109,6 @@ export function sanitizePassengerPayload(row) {
     document_number: cleanText(row?.document_number || row?.id_no || row?.passport),
     contact_no: cleanText(row?.contact_no || row?.mobile_no || row?.phone || row?.mobile),
     source: normalizePassengerSource(row?.source, { isAutoFilled }),
-    expiry_date: cleanText(row?.expiry_date),
     is_auto_filled: isAutoFilled ? 1 : 0,
     is_invoice_customer: row?.is_invoice_customer ? 1 : 0,
     customer: cleanText(row?.customer),
