@@ -28,7 +28,7 @@ const TripInvoiceList: React.FC<TripInvoiceListProps> = ({ lang }) => {
         'Trip Invoice',
         {},
         ['name', 'creation', 'invoice_date', 'trip', 'status', 'grand_total', 'invoice_passenger_name'],
-        500
+        100
       );
       setInvoices(res.message || []);
     } catch (err: any) {
