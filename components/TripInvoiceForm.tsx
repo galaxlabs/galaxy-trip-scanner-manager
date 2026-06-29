@@ -265,7 +265,7 @@ const TripInvoiceForm: React.FC<TripInvoiceFormProps> = ({ invoiceName, lang, on
           </div>
           <label className="space-y-2 block">
             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Trip Value</span>
-            <input type="number" value={invoice.trip_value ?? ''} onChange={(e) => updateTripValue(Number(e.target.value) || 0)} className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 text-xs font-bold outline-none" />
+            <input type="number" readOnly value={invoice.trip_value ?? ''} className="w-full bg-slate-100 border border-slate-100 rounded-2xl px-4 py-3 text-xs font-bold outline-none text-slate-500" />
           </label>
           <div className="grid grid-cols-3 gap-3 text-center">
             <div className="bg-slate-50 rounded-2xl p-4">

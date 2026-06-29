@@ -54,7 +54,11 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
     `${route.from_place_full || route.name} -> ${route.to_place_full || ""}${route.route_value ? ` | ${route.route_value}` : ""}`;
   const hasTripInvoice = Boolean(formData.trip_invoice);
   const tripInvoiceAlreadyCreated = isFrappeCheckEnabled(formData.trip_invoice_created) || hasTripInvoice;
+  const hasInvoiceableTripValue = Number(formData.trip_value || 0) > 0;
   const tripInvoiceSavedForPrint = Boolean(tripInvoice?.name && tripInvoice.status === "Ready" && Number(tripInvoice.grand_total || 0) > 0);
+  const selectedInvoiceCustomer = (formData.passengers || []).find((row) => Boolean(row.is_invoice_customer));
+  const selectedInvoiceCustomerName = selectedInvoiceCustomer?.passenger_name || "";
+  const selectedInvoiceCustomerMobile = selectedInvoiceCustomer?.contact_no || selectedInvoiceCustomer?.mobile_no || "";
   const allPassengersInvoiced = Boolean(
     formData.passengers?.length &&
     formData.passengers.every((p) => isFrappeCheckEnabled(p.trip_invoice_created) || Boolean(p.trip_invoice))
@@ -157,7 +161,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
             duration_minutes: route.duration_minutes,
             from_location: route.from_place_full,
             to_location: route.to_place_full,
-            trip_value: route.route_value || prev.trip_value
+            trip_value: Number(route.route_value || 0)
         }));
         setRouteSearch(getRouteLabel(route));
         setRouteDropdownOpen(false);
@@ -215,9 +219,10 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
         reverseData.trip_route = matchingRoute.name;
         reverseData.distance = matchingRoute.distance;
         reverseData.duration_minutes = matchingRoute.duration_minutes;
-        reverseData.trip_value = matchingRoute.route_value || formData.trip_value;
+        reverseData.trip_value = Number(matchingRoute.route_value || 0);
     } else {
         reverseData.trip_route = ""; 
+        reverseData.trip_value = 0;
     }
 
     setFormData(reverseData);
@@ -381,6 +386,10 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
       showToast(t.selectRouteErr, "error");
       return null;
     }
+    if (Number(formData.trip_value || 0) <= 0) {
+      showToast("Route value is required before saving the trip invoice.", "error");
+      return null;
+    }
     setLoading(true);
     try {
       const savedDoc = await FrappeClient.saveDoc('Trip', {
@@ -449,6 +458,9 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
     if (sourceTrip.billing_mode === "KM Based" && Number(sourceTrip.distance || 0) <= 0) {
       return showToast("Distance is required for KM Based billing.", "error");
     }
+    if (Number(sourceTrip.trip_value || 0) <= 0) {
+      return showToast("Route value is required before creating a trip invoice.", "error");
+    }
 
     setInvoiceLoading(true);
     try {
@@ -504,7 +516,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
       const passengers = (fullTrip.passengers || []) as Passenger[];
       const openPassengers = passengers
         .map((p, idx) => ({ p, idx }))
-        .filter(({ p }) => p.name && !isFrappeCheckEnabled(p.trip_invoice_created) && !p.trip_invoice);
+        .filter(({ p }) => p.name && !isFrappeCheckEnabled(p.trip_invoice_created));
       const selectedRows = mode === "all"
         ? openPassengers
         : openPassengers.filter(({ idx }) => selectedPassengerIndexes.includes(idx));
@@ -667,7 +679,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                 {!tripInvoiceAlreadyCreated && (
                     <button
                         onClick={createTripInvoice}
-                        disabled={invoiceLoading || loading}
+                        disabled={invoiceLoading || loading || !hasInvoiceableTripValue}
                         className="bg-white text-slate-700 py-4 rounded-[1.5rem] border border-slate-100 flex items-center justify-center gap-2.5 active:scale-[0.98] transition-all shadow-sm group disabled:opacity-40"
                     >
                         <div className="w-8 h-8 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -855,7 +867,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-widest">Trip Value</label>
-                            <input type="number" className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-100 transition-all" value={formData.trip_value || ''} onChange={(e) => { setFormData(prev => ({ ...prev, trip_value: Number(e.target.value) || undefined })); setIsDirty(true); }} />
+                            <input type="number" readOnly className="w-full bg-slate-100 border border-slate-100 rounded-2xl px-5 py-4 text-xs font-bold text-slate-500 outline-none" value={formData.trip_value || ''} />
                         </div>
                         <div className="space-y-2">
                             <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-widest">Billing Mode</label>
@@ -869,7 +881,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-widest">VAT Mode</label>
-                            <select className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-100 transition-all appearance-none" value={normalizeVatMode(formData.vat_mode)} onChange={(e) => { setFormData(prev => ({ ...prev, vat_mode: e.target.value as Trip['vat_mode'] })); setIsDirty(true); }}>
+                            <select disabled className="w-full bg-slate-100 border border-slate-100 rounded-2xl px-5 py-4 text-xs font-bold text-slate-500 outline-none appearance-none" value={normalizeVatMode(formData.vat_mode)}>
                                 <option value="Included">Included</option>
                                 <option value="Excluded">Excluded</option>
                             </select>
@@ -882,11 +894,11 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-widest">Invoice Passenger</label>
-                            <input className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-100 transition-all" value={formData.invoice_passenger_name || ''} onChange={(e) => { setFormData(prev => ({ ...prev, invoice_passenger_name: e.target.value })); setIsDirty(true); }} />
+                            <input readOnly className="w-full bg-slate-100 border border-slate-100 rounded-2xl px-5 py-4 text-xs font-bold text-slate-500 outline-none" value={selectedInvoiceCustomerName || formData.invoice_passenger_name || ''} />
                         </div>
                         <div className="space-y-2">
                             <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-widest">Invoice Mobile</label>
-                            <input className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-100 transition-all" value={formData.invoice_passenger_mobile || ''} onChange={(e) => { setFormData(prev => ({ ...prev, invoice_passenger_mobile: e.target.value })); setIsDirty(true); }} />
+                            <input readOnly className="w-full bg-slate-100 border border-slate-100 rounded-2xl px-5 py-4 text-xs font-bold text-slate-500 outline-none" value={selectedInvoiceCustomerMobile || formData.invoice_passenger_mobile || ''} />
                         </div>
                     </div>
                 </div>
@@ -928,13 +940,13 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                     ) : (
                         formData.passengers.map((p, idx) => (
                             <div key={idx} className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 relative group transition-all hover:border-blue-200 text-left rtl:text-right">
-                                <button onClick={() => { setFormData(prev => ({ ...prev, passengers: prev.passengers?.filter((_, i) => i !== idx) })); setIsDirty(true); }} className="absolute -top-2 -right-2 w-8 h-8 bg-white shadow-lg border border-slate-50 rounded-full flex items-center justify-center text-red-500 opacity-0 group-hover:opacity-100 active:scale-90 transition-all z-10">
+                                <button onClick={() => { setFormData(prev => { const removed = prev.passengers?.[idx]; const nextPassengers = prev.passengers?.filter((_, i) => i !== idx); return { ...prev, passengers: nextPassengers, invoice_passenger_name: removed?.is_invoice_customer ? "" : prev.invoice_passenger_name, invoice_passenger_mobile: removed?.is_invoice_customer ? "" : prev.invoice_passenger_mobile }; }); setIsDirty(true); }} className="absolute -top-2 -right-2 w-8 h-8 bg-white shadow-lg border border-slate-50 rounded-full flex items-center justify-center text-red-500 opacity-0 group-hover:opacity-100 active:scale-90 transition-all z-10">
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12"/></svg>
                                 </button>
                                 <div className="space-y-5">
                                     <div className="space-y-1">
                                         <label className="text-[8px] font-black text-slate-300 uppercase tracking-widest ml-1">{t.fullLegalName}</label>
-                                        <input className="w-full bg-transparent text-sm font-black text-slate-900 outline-none border-b border-transparent focus:border-blue-200 transition-colors py-1 uppercase" placeholder="..." value={p.passenger_name} onChange={(e) => { const next = [...(formData.passengers || [])]; next[idx].passenger_name = e.target.value; setFormData({...formData, passengers: next}); setIsDirty(true); }} />
+                                        <input className="w-full bg-transparent text-sm font-black text-slate-900 outline-none border-b border-transparent focus:border-blue-200 transition-colors py-1 uppercase" placeholder="..." value={p.passenger_name} onChange={(e) => { const next = [...(formData.passengers || [])]; next[idx].passenger_name = e.target.value; setFormData({...formData, passengers: next, invoice_passenger_name: next[idx].is_invoice_customer ? e.target.value : formData.invoice_passenger_name}); setIsDirty(true); }} />
                                     </div>
                                     <div className="grid grid-cols-2 gap-6 pt-3 border-t border-slate-100">
                                         <div className="space-y-1">
@@ -943,7 +955,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                                         </div>
                                         <div className="space-y-1">
                                             <label className="text-[8px] font-black text-slate-300 uppercase tracking-widest ml-1">Mobile</label>
-                                            <input className="w-full bg-transparent text-[11px] font-bold text-slate-600 outline-none uppercase" placeholder="---" value={p.contact_no || p.mobile_no || ''} onChange={(e) => { const next = [...(formData.passengers || [])]; next[idx].contact_no = e.target.value; setFormData({...formData, passengers: next}); setIsDirty(true); }} />
+                                            <input className="w-full bg-transparent text-[11px] font-bold text-slate-600 outline-none uppercase" placeholder="---" value={p.contact_no || p.mobile_no || ''} onChange={(e) => { const next = [...(formData.passengers || [])]; next[idx].contact_no = e.target.value; setFormData({...formData, passengers: next, invoice_passenger_mobile: next[idx].is_invoice_customer ? e.target.value : formData.invoice_passenger_mobile}); setIsDirty(true); }} />
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-6">
@@ -971,7 +983,13 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
                                                     ...row,
                                                     is_invoice_customer: rowIdx === idx && e.target.checked ? 1 : 0,
                                                 }));
-                                                setFormData({...formData, passengers: next});
+                                                const selectedRow = e.target.checked ? next[idx] : undefined;
+                                                setFormData({
+                                                    ...formData,
+                                                    passengers: next,
+                                                    invoice_passenger_name: selectedRow?.passenger_name || "",
+                                                    invoice_passenger_mobile: selectedRow?.contact_no || selectedRow?.mobile_no || "",
+                                                });
                                                 setIsDirty(true);
                                             }}
                                         />

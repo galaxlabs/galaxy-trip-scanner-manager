@@ -126,7 +126,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) 
           returnData.trip_route = matchingRoute.name;
           returnData.distance = matchingRoute.distance;
           returnData.duration_minutes = matchingRoute.duration_minutes;
-          returnData.trip_value = matchingRoute.route_value || baseData.trip_value;
+          returnData.trip_value = Number(matchingRoute.route_value || 0);
       } else {
           returnData.trip_route = "";
       }
@@ -141,10 +141,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) 
     if (!trip.name || trip.trip_invoice) return;
     setActionLoading(`invoice:${trip.name}`);
     try {
+      if (Number(trip.trip_value || 0) <= 0) {
+        setError("Route value is required before creating a trip invoice.");
+        return;
+      }
       await FrappeClient.createTripInvoiceFromTrip(trip.name);
       await fetchData();
       setActiveMenu(null);
-    } catch (err) {
+    } catch (err: any) {
+      setError(err?.message || "Failed to create trip invoice");
       console.error(err);
     } finally {
       setActionLoading(null);

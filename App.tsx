@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Trip, User, Language, VehicleInspectionLog } from './types';
 import { FrappeClient } from './services/frappe';
 import Login from './components/Login';
@@ -8,12 +7,45 @@ import TripForm from './components/TripForm';
 import TripInvoiceList from './components/TripInvoiceList';
 import InspectionDashboard from './components/InspectionDashboard';
 import VehicleInspectionForm from './components/VehicleInspectionForm';
+import FeedbackPage from './components/FeedbackPage';
+import ExpenseCaptureDemo from './components/ExpenseCaptureDemo';
+import DriverVatDashboard from './components/DriverVatDashboard';
 import { Layout } from './components/Layout';
+
+type ActiveModule = 'trip' | 'trip_invoice' | 'inspection' | 'driver_vat' | 'expense_demo' | 'feedback';
+type CurrentView = 'dashboard' | 'create' | 'edit';
+type NavigationTarget = CurrentView | ActiveModule | 'trips' | 'trip_invoices' | 'inspections';
+
+function moduleFromPath(pathname: string): ActiveModule {
+  if (pathname === '/dashboard/driver-vat') return 'driver_vat';
+  if (pathname === '/expenses/demo') return 'expense_demo';
+  if (pathname === '/feedback') return 'feedback';
+  if (pathname.startsWith('/trip-invoices')) return 'trip_invoice';
+  if (pathname.startsWith('/inspections')) return 'inspection';
+  return 'trip';
+}
+
+function moduleToPath(module: ActiveModule): string {
+  switch (module) {
+    case 'driver_vat':
+      return '/dashboard/driver-vat';
+    case 'expense_demo':
+      return '/expenses/demo';
+    case 'feedback':
+      return '/feedback';
+    case 'trip_invoice':
+      return '/trip-invoices';
+    case 'inspection':
+      return '/inspections';
+    default:
+      return '/trips';
+  }
+}
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
-  const [activeModule, setActiveModule] = useState<'trip' | 'trip_invoice' | 'inspection'>('trip');
-  const [currentView, setCurrentView] = useState<'dashboard' | 'create' | 'edit'>('dashboard');
+  const [activeModule, setActiveModule] = useState<ActiveModule>(() => moduleFromPath(window.location.pathname));
+  const [currentView, setCurrentView] = useState<CurrentView>('dashboard');
   const [selectedTrip, setSelectedTrip] = useState<Partial<Trip> | null>(null);
   const [selectedInspection, setSelectedInspection] = useState<Partial<VehicleInspectionLog> | null>(null);
   const [lang, setLang] = useState<Language>('en');
@@ -29,7 +61,24 @@ const App: React.FC = () => {
       }
     }
     if (savedLang) setLang(savedLang);
+
+    const handlePopState = () => {
+      setActiveModule(moduleFromPath(window.location.pathname));
+      setCurrentView('dashboard');
+      setSelectedTrip(null);
+      setSelectedInspection(null);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
+
+  const syncPath = (module: ActiveModule) => {
+    const nextPath = moduleToPath(module);
+    if (window.location.pathname !== nextPath) {
+      window.history.pushState({}, '', nextPath);
+    }
+  };
 
   const handleLogin = (userData: User) => {
     setUser(userData);
@@ -47,11 +96,20 @@ const App: React.FC = () => {
     localStorage.setItem('app_lang', newLang);
   };
 
+  const activateModule = (module: ActiveModule) => {
+    setActiveModule(module);
+    setCurrentView('dashboard');
+    setSelectedTrip(null);
+    setSelectedInspection(null);
+    syncPath(module);
+  };
+
   const startNewTrip = (initialData?: Partial<Trip>) => {
     setSelectedTrip(initialData || { trip_status: 'Scheduled', passengers: [] });
     setSelectedInspection(null);
     setActiveModule('trip');
     setCurrentView('create');
+    syncPath('trip');
   };
 
   const startNewInspection = (initialData?: Partial<VehicleInspectionLog>) => {
@@ -64,6 +122,42 @@ const App: React.FC = () => {
     setSelectedTrip(null);
     setActiveModule('inspection');
     setCurrentView('create');
+    syncPath('inspection');
+  };
+
+  const handleNavigate = (view: NavigationTarget) => {
+    if (view === 'trips') {
+      activateModule('trip');
+      return;
+    }
+    if (view === 'trip_invoices') {
+      activateModule('trip_invoice');
+      return;
+    }
+    if (view === 'inspections') {
+      activateModule('inspection');
+      return;
+    }
+    if (view === 'driver_vat' || view === 'expense_demo' || view === 'feedback') {
+      activateModule(view);
+      return;
+    }
+
+    if (view === 'create') {
+      if (activeModule === 'trip') {
+        startNewTrip();
+      } else if (activeModule === 'inspection') {
+        startNewInspection();
+      } else {
+        activateModule('trip');
+      }
+      return;
+    }
+
+    setCurrentView('dashboard');
+    setSelectedTrip(null);
+    setSelectedInspection(null);
+    syncPath(activeModule);
   };
 
   if (!user) {
@@ -71,46 +165,17 @@ const App: React.FC = () => {
   }
 
   return (
-    <Layout 
-      user={user} 
+    <Layout
+      user={user}
       lang={lang}
-      onLogout={handleLogout} 
+      onLogout={handleLogout}
       onLangChange={handleLangChange}
-      onNavigate={(view) => {
-        if (view === 'trips' || view === 'trip_invoices' || view === 'inspections' || view === 'switch_module') {
-          const nextModule =
-            view === 'trip_invoices'
-              ? 'trip_invoice'
-              : view === 'inspections' || view === 'switch_module'
-                ? 'inspection'
-                : 'trip';
-          setActiveModule(nextModule);
-          setCurrentView('dashboard');
-          setSelectedTrip(null);
-          setSelectedInspection(null);
-          return;
-        }
-
-        if (view === 'create') {
-          if (activeModule === 'trip') {
-            startNewTrip();
-          } else if (activeModule === 'inspection') {
-            startNewInspection();
-          } else {
-            setActiveModule('trip');
-            startNewTrip();
-          }
-        } else {
-          setCurrentView('dashboard');
-          setSelectedTrip(null);
-          setSelectedInspection(null);
-        }
-      }}
+      onNavigate={handleNavigate}
       currentView={currentView}
       activeModule={activeModule}
     >
       {activeModule === 'trip' && currentView === 'dashboard' && (
-        <Dashboard 
+        <Dashboard
           lang={lang}
           onCreateNew={startNewTrip}
           onEditTrip={(trip) => {
@@ -121,14 +186,18 @@ const App: React.FC = () => {
         />
       )}
       {activeModule === 'trip' && (currentView === 'create' || currentView === 'edit') && (
-        <TripForm 
+        <TripForm
           lang={lang}
           trip={selectedTrip as Trip}
           onBack={() => {
             setCurrentView('dashboard');
             setSelectedTrip(null);
+            syncPath('trip');
           }}
-          onSave={() => setCurrentView('dashboard')}
+          onSave={() => {
+            setCurrentView('dashboard');
+            syncPath('trip');
+          }}
         />
       )}
 
@@ -154,10 +223,18 @@ const App: React.FC = () => {
           onBack={() => {
             setCurrentView('dashboard');
             setSelectedInspection(null);
+            syncPath('inspection');
           }}
-          onSave={() => setCurrentView('dashboard')}
+          onSave={() => {
+            setCurrentView('dashboard');
+            syncPath('inspection');
+          }}
         />
       )}
+
+      {activeModule === 'driver_vat' && <DriverVatDashboard lang={lang} user={user} />}
+      {activeModule === 'expense_demo' && <ExpenseCaptureDemo lang={lang} />}
+      {activeModule === 'feedback' && <FeedbackPage lang={lang} />}
     </Layout>
   );
 };

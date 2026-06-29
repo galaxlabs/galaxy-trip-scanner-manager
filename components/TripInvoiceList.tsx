@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Language, TripInvoice } from '../types';
 import { FrappeClient } from '../services/frappe';
+import { isReadyInvoice } from '../services/driverVatDashboardCore.js';
 import TripInvoiceForm from './TripInvoiceForm';
 import { translations } from '../translations';
 
@@ -26,11 +27,11 @@ const TripInvoiceList: React.FC<TripInvoiceListProps> = ({ lang }) => {
     try {
       const res = await FrappeClient.getList(
         'Trip Invoice',
-        {},
+        { status: 'Ready' },
         ['name', 'creation', 'invoice_date', 'trip', 'status', 'grand_total', 'invoice_passenger_name'],
         100
       );
-      setInvoices(res.message || []);
+      setInvoices((res.message || []).filter(isReadyInvoice));
     } catch (err: any) {
       setError(err.message || 'Failed to fetch Trip Invoices');
     } finally {

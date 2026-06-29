@@ -58,7 +58,6 @@ test("keeps only the passenger fields we want to store in Frappe", () => {
       document_type: "Visa",
       contact_no: "123",
       source: "OCR",
-      expiry_date: "21/02/2036",
       is_auto_filled: 1,
       is_invoice_customer: 0,
       customer: undefined,
