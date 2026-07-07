@@ -75,7 +75,7 @@ async function callGemini<T>(
   base64Data: string,
   mimeType: string
 ): Promise<{ data: T; provider?: string }> {
-  const url = new URL("/api/gemini", window.location.origin);
+  const url = new URL("/api/ai-router", window.location.origin);
   const res = await fetch(url.toString(), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
