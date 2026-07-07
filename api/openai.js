@@ -26,12 +26,11 @@ function getClient() {
   return new OpenAI({ apiKey });
 }
 
-const SYSTEM_PROMPT = `You are a document data extraction assistant. Extract passenger and trip/vehicle information from the provided image.
+const SYSTEM_PROMPT = `You are a document data extraction assistant. Extract only name, passport/document number, and nationality from the provided image.
 
 Rules:
-- For passenger documents (Passport, Aqama, Nusuk, Visa, ID): extract name, passport/document_number, nationality, document_type, contact_no, expiry_date.
-- For trip/vehicle documents: extract reg_no (registration number), compny (company name), phone, model (vehicle model).
-- If the document contains both, extract both.
+- Extract exactly: name, passport (document/passport number), and nationality.
+- Do NOT extract company names, document types, expiry dates, contact numbers, visa types, or any other fields.
 - Respond with valid JSON only. No markdown, no code fences.`;
 
 function buildPassengerMessages(base64Data, mimeType) {
@@ -40,7 +39,7 @@ function buildPassengerMessages(base64Data, mimeType) {
     {
       role: "user",
       content: [
-        { type: "text", text: "Extract only the core passenger details from this document. Support Passport, Aqama, Nusuk, Visa, and similar papers. Return a JSON array of objects with keys: name, passport, nationality, document_type, contact_no, expiry_date." },
+        { type: "text", text: "Extract passenger details from this document. Return a JSON array of objects with exactly these keys: name, passport, nationality. No other fields." },
         { type: "image_url", image_url: { url: `data:${mimeType};base64,${extractDataPart(base64Data)}` } },
       ],
     },
@@ -48,16 +47,7 @@ function buildPassengerMessages(base64Data, mimeType) {
 }
 
 function buildTripMessages(base64Data, mimeType) {
-  return [
-    { role: "system", content: SYSTEM_PROMPT },
-    {
-      role: "user",
-      content: [
-        { type: "text", text: "Extract vehicle and trip info from this document. Return a JSON object with keys: reg_no, compny, phone, model." },
-        { type: "image_url", image_url: { url: `data:${mimeType};base64,${extractDataPart(base64Data)}` } },
-      ],
-    },
-  ];
+  return buildPassengerMessages(base64Data, mimeType);
 }
 
 function buildAutoMessages(base64Data, mimeType) {
@@ -66,7 +56,7 @@ function buildAutoMessages(base64Data, mimeType) {
     {
       role: "user",
       content: [
-        { type: "text", text: "Extract BOTH passenger details and trip/vehicle info from this document. Return JSON with keys: passengers (array of objects with name, passport, nationality, document_type, contact_no, expiry_date) and trip (object with reg_no, compny, phone, model)." },
+        { type: "text", text: "Extract passenger details from this document. Return JSON with key 'passengers' containing an array of objects with exactly: name, passport, nationality. No other fields, no trip object." },
         { type: "image_url", image_url: { url: `data:${mimeType};base64,${extractDataPart(base64Data)}` } },
       ],
     },
@@ -132,34 +122,31 @@ export default async function handler(req, res) {
     const rawText = (response.choices?.[0]?.message?.content || "").trim();
 
     const fallbackValue =
-      normalizedTask === "passengers" ? [] : normalizedTask === "trip" ? {} : { passengers: [], trip: {} };
+      normalizedTask === "passengers" || normalizedTask === "auto" ? [] : [];
 
     let data = parseJsonLoose(rawText, fallbackValue);
 
-    if (normalizedTask === "passengers") {
-      if (Array.isArray(data)) {
-      } else if (data && typeof data === "object" && Array.isArray(data.passengers)) {
+    if (normalizedTask === "auto") {
+      if (data && typeof data === "object" && Array.isArray(data.passengers)) {
         data = data.passengers;
-      } else if (data && typeof data === "object") {
+      } else if (data && typeof data === "object" && !Array.isArray(data)) {
+        data = [data];
+      }
+    }
+
+    // Always return array of passengers, strip extra fields
+    if (!Array.isArray(data)) {
+      if (data && typeof data === "object") {
         data = [data];
       } else {
         data = [];
       }
-    } else if (normalizedTask === "trip") {
-      if (Array.isArray(data)) data = data[0] || {};
-      if (!data || typeof data !== "object") data = {};
-    } else {
-      if (!data || typeof data !== "object") data = {};
-      if (Array.isArray(data.passengers)) {
-      } else if (data.passengers && typeof data.passengers === "object") {
-        data.passengers = [data.passengers];
-      } else {
-        data.passengers = [];
-      }
-      if (!data.trip || typeof data.trip !== "object" || Array.isArray(data.trip)) {
-        data.trip = {};
-      }
     }
+    data = data.map(p => ({
+      name: p.name || "",
+      passport: p.passport || p.document_number || p.passport_number || "",
+      nationality: p.nationality || p.country || "",
+    })).filter(p => p.name || p.passport || p.nationality);
 
     withCors(res);
     return res.status(200).json({ ok: true, data, provider: "openai" });

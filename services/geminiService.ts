@@ -1,76 +1,31 @@
 
 // services/geminiService.ts
-// Frontend helper: calls the server-side `/api/gemini` function (Vertex AI).
+// Frontend helper: calls the server-side AI extraction endpoint.
 
 export interface ExtractedPassenger {
   name: string;
   passport: string;
   nationality: string;
-  document_type?: string;
-  contact_no?: string;
-  expiry_date?: string;
 }
 
 function normalizeExtractedPassenger(input: any): ExtractedPassenger | null {
   if (!input || typeof input !== "object") return null;
 
-  const name =
-    input.name ??
-    input.passenger_name ??
-    input.full_name ??
-    input.passengerName ??
-    "";
-
-  const passport =
-    input.passport ??
-    input.document_number ??
-    input.documentNumber ??
-    input.passport_number ??
-    input.passportNumber ??
-    "";
-
-  const nationality =
-    input.nationality ??
-    input.country ??
-    input.nationality_code ??
-    input.nationalityCode ??
-    "";
-
-  const documentType =
-    input.document_type ??
-    input.documentType ??
-    input.type ??
-    "";
-
-  const contactNo =
-    input.contact_no ??
-    input.contactNo ??
-    input.mobile_no ??
-    input.mobile ??
-    input.phone ??
-    "";
-
-  const expiryDate =
-    input.expiry_date ??
-    input.expiryDate ??
-    input.expiry ??
-    "";
+  const name = input.name ?? input.passenger_name ?? input.full_name ?? "";
+  const passport = input.passport ?? input.document_number ?? input.passport_number ?? "";
+  const nationality = input.nationality ?? input.country ?? "";
 
   const normalized: ExtractedPassenger = {
     name: String(name || ""),
     passport: String(passport || ""),
     nationality: String(nationality || ""),
-    document_type: String(documentType || ""),
-    contact_no: String(contactNo || ""),
-    expiry_date: String(expiryDate || ""),
   };
 
-  // If we don't have the minimum fields, treat as unusable.
   if (!normalized.name && !normalized.passport && !normalized.nationality) return null;
   return normalized;
 }
 
-async function callGemini<T>(
+async function callAI<T>(
   task: "passengers" | "trip" | "auto",
   base64Data: string,
   mimeType: string
@@ -94,13 +49,6 @@ async function callGemini<T>(
     const msg = payload?.error || `HTTP ${res.status}`;
     const err: any = new Error(msg);
     err.status = res.status;
-    const retryAfterHeader = res.headers.get("Retry-After");
-    const retryAfterSeconds =
-      payload?.retryAfterSeconds ??
-      (retryAfterHeader ? Number(retryAfterHeader) : undefined);
-    if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
-      err.retryAfterSeconds = retryAfterSeconds;
-    }
     throw err;
   }
 
@@ -111,17 +59,9 @@ export const extractPassengerInfo = async (
   base64Data: string,
   mimeType: string = "image/jpeg"
 ): Promise<ExtractedPassenger[]> => {
-  const { data: raw } = await callGemini<any>("passengers", base64Data, mimeType);
+  const { data: raw } = await callAI<any>("passengers", base64Data, mimeType);
   const list = Array.isArray(raw) ? raw : [];
   return list.map(normalizeExtractedPassenger).filter(Boolean) as ExtractedPassenger[];
-};
-
-export const extractTripInfo = async (
-  base64Data: string,
-  mimeType: string = "image/jpeg"
-): Promise<any> => {
-  const { data } = await callGemini<Record<string, any>>("trip", base64Data, mimeType);
-  return data;
 };
 
 export const extractDocumentInfo = async (
@@ -129,17 +69,14 @@ export const extractDocumentInfo = async (
   mimeType: string = "image/jpeg"
 ): Promise<{
   passengers: ExtractedPassenger[];
-  trip: Record<string, any>;
   provider?: string;
 }> => {
-  const { data, provider } = await callGemini<any>("auto", base64Data, mimeType);
+  const { data, provider } = await callAI<any>("auto", base64Data, mimeType);
 
-  const rawPassengers = Array.isArray(data?.passengers) ? data.passengers : [];
+  const rawPassengers = Array.isArray(data) ? data : Array.isArray(data?.passengers) ? data.passengers : [];
   const passengers = rawPassengers
     .map(normalizeExtractedPassenger)
     .filter(Boolean) as ExtractedPassenger[];
 
-  const trip = data?.trip && typeof data.trip === "object" && !Array.isArray(data.trip) ? data.trip : {};
-
-  return { passengers, trip, provider };
+  return { passengers, provider };
 };

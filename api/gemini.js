@@ -156,9 +156,8 @@ function buildPassengerRequest({ base64Data, mimeType, model }) {
           },
           {
             text:
-              "Extract only the core passenger details from this document. Provide JSON array. " +
-              "Support Passport, Aqama, Nusuk, Visa, and similar papers. " +
-              "Return only: name, passport, nationality, document_type, contact_no, expiry_date.",
+              "Extract passenger details from this document. Return ONLY a JSON array. " +
+              "Each object must have exactly these keys: name, passport, nationality. No other fields.",
           },
         ],
       },
@@ -173,9 +172,6 @@ function buildPassengerRequest({ base64Data, mimeType, model }) {
             name: { type: Type.STRING },
             passport: { type: Type.STRING },
             nationality: { type: Type.STRING },
-            document_type: { type: Type.STRING },
-            contact_no: { type: Type.STRING },
-            expiry_date: { type: Type.STRING },
           },
           required: ["name", "passport", "nationality"],
         },
@@ -185,35 +181,7 @@ function buildPassengerRequest({ base64Data, mimeType, model }) {
 }
 
 function buildTripRequest({ base64Data, mimeType, model }) {
-  return {
-    model,
-    contents: [
-      {
-        role: "user",
-        parts: [
-          {
-            inlineData: {
-              mimeType,
-              data: extractDataPart(base64Data),
-            },
-          },
-          { text: "Extract vehicle and trip info." },
-        ],
-      },
-    ],
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          reg_no: { type: Type.STRING },
-          compny: { type: Type.STRING },
-          phone: { type: Type.STRING },
-          model: { type: Type.STRING },
-        },
-      },
-    },
-  };
+  return buildPassengerRequest({ base64Data, mimeType, model });
 }
 
 function buildAutoRequest({ base64Data, mimeType, model }) {
@@ -231,10 +199,9 @@ function buildAutoRequest({ base64Data, mimeType, model }) {
           },
           {
             text:
-              "Extract BOTH passenger details and trip/vehicle info from this document.\n" +
-              "Return JSON with keys: passengers (array) and trip (object).\n" +
-              "For each passenger, support Passport, Aqama, Nusuk, Visa, and similar papers. " +
-              "Return only: name, passport, nationality, document_type, contact_no, expiry_date.",
+              "Extract passenger details from this document. Return JSON with key 'passengers' " +
+              "containing an array. Each object must have exactly: name, passport, nationality. " +
+              "No other fields, no trip object.",
           },
         ],
       },
@@ -252,20 +219,8 @@ function buildAutoRequest({ base64Data, mimeType, model }) {
                 name: { type: Type.STRING },
                 passport: { type: Type.STRING },
                 nationality: { type: Type.STRING },
-                document_type: { type: Type.STRING },
-                contact_no: { type: Type.STRING },
-                expiry_date: { type: Type.STRING },
               },
               required: ["name", "passport", "nationality"],
-            },
-          },
-          trip: {
-            type: Type.OBJECT,
-            properties: {
-              reg_no: { type: Type.STRING },
-              compny: { type: Type.STRING },
-              phone: { type: Type.STRING },
-              model: { type: Type.STRING },
             },
           },
         },
@@ -378,7 +333,7 @@ export default async function handler(req, res) {
 
     let data;
     const fallbackValue =
-      normalizedTask === "passengers" ? [] : normalizedTask === "trip" ? {} : { passengers: [], trip: {} };
+      normalizedTask === "passengers" || normalizedTask === "auto" ? [] : [];
 
     try {
       data = parseJsonLoose(rawText, fallbackValue);
@@ -386,37 +341,26 @@ export default async function handler(req, res) {
       data = fallbackValue;
     }
 
-    // Normalize shape so the frontend logic stays stable:
-    // - task=passengers => always an array
-    // - task=trip => always an object
-    if (normalizedTask === "passengers") {
-      if (Array.isArray(data)) {
-        // ok
-      } else if (data && typeof data === "object" && Array.isArray(data.passengers)) {
+    if (normalizedTask === "auto") {
+      if (data && typeof data === "object" && Array.isArray(data.passengers)) {
         data = data.passengers;
-      } else if (data && typeof data === "object") {
-        // Sometimes models return a single object.
+      } else if (data && typeof data === "object" && !Array.isArray(data)) {
+        data = [data];
+      }
+    }
+
+    if (!Array.isArray(data)) {
+      if (data && typeof data === "object") {
         data = [data];
       } else {
         data = [];
       }
-    } else if (normalizedTask === "trip") {
-      if (Array.isArray(data)) data = data[0] || {};
-      if (!data || typeof data !== "object") data = {};
-    } else {
-      // task=auto
-      if (!data || typeof data !== "object") data = {};
-      if (Array.isArray(data.passengers)) {
-        // ok
-      } else if (data.passengers && typeof data.passengers === "object") {
-        data.passengers = [data.passengers];
-      } else {
-        data.passengers = [];
-      }
-      if (!data.trip || typeof data.trip !== "object" || Array.isArray(data.trip)) {
-        data.trip = {};
-      }
     }
+    data = data.map(p => ({
+      name: p.name || "",
+      passport: p.passport || p.document_number || p.passport_number || "",
+      nationality: p.nationality || p.country || "",
+    })).filter(p => p.name || p.passport || p.nationality);
 
     withCors(res);
     return res.status(200).json({ ok: true, data, provider });
