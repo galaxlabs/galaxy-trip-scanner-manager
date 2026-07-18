@@ -131,12 +131,21 @@ export class FrappeClient {
     limit_page_length: number = 50,
     order_by: string = "creation desc"
   ) {
+    let userEmail = "";
+    try {
+      const stored = localStorage.getItem("frappe_user");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        userEmail = parsed.email || parsed.username || "";
+      }
+    } catch {}
     return this.fetch("tms.api.auth.get_user_filtered_list", {
       doctype,
       filters: JSON.stringify(filters),
       fields: JSON.stringify(fields),
       limit_page_length,
       order_by,
+      current_user_email: userEmail,
     }, { method: "POST" });
   }
 

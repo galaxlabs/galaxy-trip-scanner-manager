@@ -164,12 +164,21 @@ export function getSuggestedRange(timeSpan: DriverVatDashboardFilters['timeSpan'
 }
 
 async function getDashboardList(doctype: string, filters: AnyRecord, fields: string[]) {
+  let userEmail = "";
+  try {
+    const stored = localStorage.getItem("frappe_user");
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      userEmail = parsed.email || parsed.username || "";
+    }
+  } catch {}
   return FrappeClient.fetch('tms.api.auth.get_user_filtered_list', {
     doctype,
     filters: JSON.stringify(filters),
     fields: JSON.stringify(fields),
     limit_page_length: 500,
     order_by: 'creation desc',
+    current_user_email: userEmail,
   }, { method: 'POST' });
 }
 
