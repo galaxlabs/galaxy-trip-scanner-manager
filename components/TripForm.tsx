@@ -92,15 +92,14 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang, user })
         setRoutes(nextRoutes);
         const allStaff: Staff[] = staffRes.message || [];
         const userEmail = user?.email?.toLowerCase().trim();
-        const filteredStaff = userEmail
-          ? allStaff.filter((s: any) => {
+        const currentStaff = userEmail
+          ? allStaff.find((s: any) => {
               const staffEmail = String(s.email || '').toLowerCase().trim();
               const staffName = String(s.name || '').toLowerCase().trim();
               return staffEmail === userEmail || staffName === userEmail || staffName === user?.username?.toLowerCase().trim();
             })
-          : allStaff;
-        const currentStaff = filteredStaff[0] as any;
-        setStaff(filteredStaff.length ? filteredStaff : allStaff);
+          : undefined;
+        setStaff(allStaff);
 
         if (trip?.name && !formData.passengers?.length) {
             const fullTrip = await FrappeClient.getDoc('Trip', trip.name);
