@@ -31,8 +31,8 @@ export function findCurrentStaff(staffRows, user) {
   });
 }
 
-export function matchesSelectedDriver(row, selectedDriver) {
-  if (row?.vatMode !== "Included") return false;
+export function matchesSelectedDriver(row, selectedDriver, vatMode) {
+  if (vatMode && vatMode !== 'All' && row?.vatMode !== vatMode) return false;
   return !selectedDriver || normalize(row?.driver) === normalize(selectedDriver);
 }
 

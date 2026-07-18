@@ -1,6 +1,6 @@
 import type { User } from '../types';
 import { FrappeClient } from './frappe';
-import { buildStaffLabel, findCurrentStaff, isReadyInvoice, matchesReadyInvoiceDateRange, matchesSelectedDriver } from './driverVatDashboardCore.js';
+import { buildStaffLabel, findCurrentStaff, matchesSelectedDriver } from './driverVatDashboardCore.js';
 
 export interface DriverVatDashboardFilters {
   fromDate: string;
@@ -248,12 +248,6 @@ function normalizeInvoice(row: AnyRecord, trip?: TripRow) {
   };
 }
 
-function matchesFilters(row: InvoiceRow, filters: DriverVatDashboardFilters, effectiveDriver: string) {
-  if (!matchesSelectedDriver(row, effectiveDriver)) return false;
-  if (!matchesReadyInvoiceDateRange(row, filters.fromDate, filters.toDate)) return false;
-  return true;
-}
-
 function sortMetrics(rows: ChartMetric[]) {
   return [...rows].sort((a, b) => b.value - a.value).slice(0, 8);
 }
@@ -271,19 +265,29 @@ export async function getDriverVatDashboard(
   const currentStaff = findCurrentStaff(staffRows, user);
   const effectiveDriver = String(currentStaff?.name || filters.driver || '');
 
+  const tripFilters: any[] = [];
+  if (effectiveDriver) tripFilters.push(['driver', '=', effectiveDriver]);
+  if (filters.fromDate) tripFilters.push(['departure', '>=', filters.fromDate]);
+  if (filters.toDate) tripFilters.push(['departure', '<=', filters.toDate]);
+
+  const invoiceFilters: any[] = [];
+  invoiceFilters.push(['status', '=', 'Ready']);
+  if (filters.fromDate) invoiceFilters.push(['invoice_date', '>=', filters.fromDate]);
+  if (filters.toDate) invoiceFilters.push(['invoice_date', '<=', filters.toDate]);
+
   const [tripRes, invoiceRes] = await Promise.all([
     getDashboardList(
       'Trip',
-      effectiveDriver ? { driver: effectiveDriver } : {},
+      tripFilters.length ? tripFilters : {},
       ['name', 'driver', 'assigned_vehicle', 'distance', 'trip_value']
     ),
     getDashboardList(
       'Trip Invoice',
-      {},
+      invoiceFilters.length ? invoiceFilters : {},
       [
         'name', 'creation', 'invoice_date', 'status', 'trip', 'company', 'customer',
         'invoice_passenger_name', 'trip_value', 'distance', 'vat_mode', 'vat_rate',
-        'net_total', 'vat_amount', 'grand_total', 'invoice_scope', 'invoice_scope',
+        'net_total', 'vat_amount', 'grand_total', 'invoice_scope',
       ]
     ),
   ]);
@@ -291,14 +295,13 @@ export async function getDriverVatDashboard(
   const trips: TripRow[] = (tripRes.message || []).map((row: AnyRecord) => normalizeTrip(row, staffRows));
   const tripByName = new Map(trips.map((row) => [row.name, row]));
   const invoices: InvoiceRow[] = (invoiceRes.message || [])
-    .filter(isReadyInvoice)
     .map((row: AnyRecord) => normalizeInvoice(row, tripByName.get(String(row.trip || ''))))
     .filter((row: InvoiceRow) => row.driver !== FALLBACK_DRIVER);
 
   const months = Array.from(new Set(invoices.map((row) => row.date.slice(0, 7)).filter(Boolean)))
     .sort()
     .reverse();
-  const filteredInvoices = invoices.filter((row) => matchesFilters(row, filters, effectiveDriver));
+  const filteredInvoices = invoices.filter((row) => matchesSelectedDriver(row, effectiveDriver, filters.vatMode));
 
   const uniqueTrips = new Map<string, InvoiceRow>();
   for (const row of filteredInvoices) uniqueTrips.set(row.trip || row.invoiceNo, row);
