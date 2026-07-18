@@ -42,6 +42,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
   const [queue, setQueue] = useState<ScanQueue>({ total: 0, processed: 0, scanning: false });
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | null }>({ message: '', type: null });
   const [confirmModal, setConfirmModal] = useState<{ title: string; desc: string; action: () => void } | null>(null);
+  const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
   
   const t = translations[lang];
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -377,6 +378,29 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
     }
   };
 
+  const handleCreateInvoiceAfterSave = async (scope: 'Trip' | 'Passenger') => {
+    setShowInvoiceDialog(false);
+    setInvoiceLoading(true);
+    try {
+      const result = await FrappeClient.createTripInvoiceFromTrip(formData.name!, scope);
+      const invoice = result.trip_invoice ? await FrappeClient.getTripInvoice(result.trip_invoice) : null;
+      if (invoice) {
+        setTripInvoice(invoice);
+        setShowTripInvoiceForm(true);
+      }
+      setFormData(prev => ({
+        ...prev,
+        trip_invoice_created: 1,
+        trip_invoice: result.trip_invoice || prev.trip_invoice,
+      }));
+      showToast(`Trip Invoice created: ${result.trip_invoice}`, "success");
+    } catch (err: any) {
+      showToast(err.message || "Failed to create invoice", "error");
+    } finally {
+      setInvoiceLoading(false);
+    }
+  };
+
   const saveTripDocument = async (showSuccess = true): Promise<Trip | null> => {
     if (!formData.driver) {
       showToast(t.selectDriverErr, "error");
@@ -402,6 +426,9 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
       formDataRef.current = savedDoc;
       setIsDirty(false);
       if (showSuccess) showToast(t.syncSuccess, "success");
+      if (savedDoc?.name && !tripInvoiceAlreadyCreated) {
+        setShowInvoiceDialog(true);
+      }
       return savedDoc;
     } catch (err: any) {
       showToast(err.message || "Error", "error");
@@ -441,7 +468,6 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
 
   const printTripSheet = () => {
     if (!formData.name) return showToast(t.savePrintErr, "error");
-    if (!tripSheetReadyForPrint) return showToast("Save Trip Invoice before printing Trip.", "error");
     window.open(FrappeClient.getPrintUrl('Trip', formData.name, 'Trip'), '_blank');
   };
 
@@ -625,6 +651,27 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
           </div>
       )}
 
+      {/* Invoice Scope Dialog */}
+      {showInvoiceDialog && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+              <div className="bg-white w-full max-w-xs rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95 duration-200 text-center">
+                  <h3 className="text-lg font-black text-slate-900 leading-tight mb-2 uppercase tracking-tighter">Create Invoice</h3>
+                  <p className="text-xs text-slate-500 font-medium mb-8 leading-relaxed">How should the invoice be created?</p>
+                  <div className="space-y-2">
+                      <button onClick={() => handleCreateInvoiceAfterSave('Trip')} disabled={invoiceLoading} className="w-full bg-slate-900 text-white py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all disabled:opacity-50">
+                          Trip (single invoice, full amount)
+                      </button>
+                      <button onClick={() => handleCreateInvoiceAfterSave('Passenger')} disabled={invoiceLoading} className="w-full bg-blue-600 text-white py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all disabled:opacity-50">
+                          Customer (per passenger, divided)
+                      </button>
+                      <button onClick={() => setShowInvoiceDialog(false)} disabled={invoiceLoading} className="w-full bg-slate-50 text-slate-400 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all">
+                          Skip
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* Header Bar */}
       <div className="px-4 py-6 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur-xl z-30 border-b border-slate-100 shadow-sm">
         <button onClick={onBack} className="w-10 h-10 flex items-center justify-center text-slate-400 hover:bg-slate-50 rounded-2xl active:scale-90 transition-all">
@@ -647,17 +694,15 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
         {/* Record Quick Actions */}
         {formData.name && (
             <div className="grid grid-cols-2 gap-4">
-                {tripSheetReadyForPrint && (
-                    <button
-                        onClick={printTripSheet}
-                        className="bg-white text-slate-700 py-4 rounded-[1.5rem] border border-slate-100 flex items-center justify-center gap-2.5 active:scale-[0.98] transition-all shadow-sm group"
-                    >
-                        <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2z"/></svg>
-                        </div>
-                        <span className="text-[10px] font-black uppercase tracking-widest">Print Trip</span>
-                    </button>
-                )}
+                <button
+                    onClick={printTripSheet}
+                    className="bg-white text-slate-700 py-4 rounded-[1.5rem] border border-slate-100 flex items-center justify-center gap-2.5 active:scale-[0.98] transition-all shadow-sm group"
+                >
+                    <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2z"/></svg>
+                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-widest">Print Trip</span>
+                </button>
                 <button 
                     onClick={() => setConfirmModal({ title: t.duplicateTrip, desc: t.duplicateDesc, action: execDuplicate })}
                     className="bg-white text-slate-700 py-4 rounded-[1.5rem] border border-slate-100 flex items-center justify-center gap-2.5 active:scale-[0.98] transition-all shadow-sm group"

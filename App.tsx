@@ -51,15 +51,28 @@ const App: React.FC = () => {
   const [lang, setLang] = useState<Language>('en');
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('frappe_user');
-    const savedLang = localStorage.getItem('app_lang') as Language;
-    if (savedUser) {
+    (async () => {
       try {
-        setUser(JSON.parse(savedUser));
+        const userInfo = await FrappeClient.getCurrentUser();
+        if (userInfo?.is_authenticated) {
+          const profile = {
+            username: userInfo.name,
+            full_name: userInfo.full_name || userInfo.name,
+            email: userInfo.email,
+            roles: userInfo.roles,
+          };
+          setUser(profile);
+          localStorage.setItem('frappe_user', JSON.stringify(profile));
+        }
       } catch {
-        localStorage.removeItem('frappe_user');
+        const savedUser = localStorage.getItem('frappe_user');
+        if (savedUser) {
+          try { setUser(JSON.parse(savedUser)); } catch { localStorage.removeItem('frappe_user'); }
+        }
       }
-    }
+    })();
+
+    const savedLang = localStorage.getItem('app_lang') as Language;
     if (savedLang) setLang(savedLang);
 
     const handlePopState = () => {

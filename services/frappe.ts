@@ -102,6 +102,16 @@ export class FrappeClient {
 }
 
 
+  static async getCurrentUser() {
+    const res = await this.fetch("tms.api.auth.get_current_user", {}, { method: "POST" });
+    return res.message;
+  }
+
+  static async whoami() {
+    const res = await this.fetch("tms.api.auth.whoami", {}, { method: "GET" });
+    return res.message;
+  }
+
   // NOTE: Token-proxy approach doesn't require frappe login.
   // This is only for UI/local storage.
   static async login(username: string, _password?: string) {

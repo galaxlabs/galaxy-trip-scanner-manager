@@ -287,21 +287,19 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) 
                                   {actionLoading === `invoice:${trip.name}` ? t.creating : t.createTripInvoice}
                               </button>
                             )}
+                            <button onClick={(e) => handlePrintTrip(e, trip)} className="w-full text-left rtl:text-right px-6 py-4 text-[10px] font-black text-slate-600 hover:bg-slate-50 flex items-center gap-3 border-t border-slate-50 uppercase transition-colors">
+                                <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2z"/></svg>
+                                </div>
+                                {t.printTrip}
+                            </button>
                             {canPrintInvoice(trip) && (
-                              <>
-                                <button onClick={(e) => handlePrintTrip(e, trip)} className="w-full text-left rtl:text-right px-6 py-4 text-[10px] font-black text-slate-600 hover:bg-slate-50 flex items-center gap-3 border-t border-slate-50 uppercase transition-colors">
-                                    <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2z"/></svg>
-                                    </div>
-                                    {t.printTrip}
-                                </button>
-                                <button onClick={(e) => handlePrintInvoice(e, trip)} className="w-full text-left rtl:text-right px-6 py-4 text-[10px] font-black text-slate-600 hover:bg-slate-50 flex items-center gap-3 border-t border-slate-50 uppercase transition-colors">
-                                    <div className="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 17v-6h6v6m2 4H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z"/></svg>
-                                    </div>
-                                    {t.printInvoice}
-                                </button>
-                              </>
+                              <button onClick={(e) => handlePrintInvoice(e, trip)} className="w-full text-left rtl:text-right px-6 py-4 text-[10px] font-black text-slate-600 hover:bg-slate-50 flex items-center gap-3 border-t border-slate-50 uppercase transition-colors">
+                                  <div className="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 17v-6h6v6m2 4H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z"/></svg>
+                                  </div>
+                                  {t.printInvoice}
+                              </button>
                             )}
                             <button onClick={(e) => handleDuplicate(e, trip)} className="w-full text-left rtl:text-right px-6 py-4 text-[10px] font-black text-slate-600 hover:bg-slate-50 flex items-center gap-3 uppercase transition-colors">
                                 <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
