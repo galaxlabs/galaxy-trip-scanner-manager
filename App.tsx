@@ -55,11 +55,10 @@ const App: React.FC = () => {
       try {
         const userInfo = await FrappeClient.getCurrentUser();
         if (userInfo?.is_authenticated) {
-          const profile = {
+          const profile: User = {
             username: userInfo.name,
             full_name: userInfo.full_name || userInfo.name,
             email: userInfo.email,
-            roles: userInfo.roles,
           };
           setUser(profile);
           localStorage.setItem('frappe_user', JSON.stringify(profile));
@@ -202,6 +201,7 @@ const App: React.FC = () => {
         <TripForm
           lang={lang}
           trip={selectedTrip as Trip}
+          user={user}
           onBack={() => {
             setCurrentView('dashboard');
             setSelectedTrip(null);

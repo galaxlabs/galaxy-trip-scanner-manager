@@ -124,6 +124,7 @@ export interface Staff {
 export interface User {
   username: string;
   full_name: string;
+  email?: string;
 }
 
 export interface VehicleInspectionChecklistItem {

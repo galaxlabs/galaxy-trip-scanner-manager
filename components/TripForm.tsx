@@ -12,6 +12,7 @@ interface TripFormProps {
   onBack: () => void;
   onSave: () => void;
   lang: Language;
+  user?: User | null;
 }
 
 interface ScanQueue {
@@ -20,7 +21,7 @@ interface ScanQueue {
     scanning: boolean;
 }
 
-const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
+const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang, user }) => {
   const [formData, setFormData] = useState<Trip>(trip || {
     trip_status: 'Scheduled',
     passengers: [],
@@ -86,10 +87,20 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
     const fetchData = async () => {
       try {
         const routesRes = await FrappeClient.getList('Route', {}, ['name', 'from_place_full', 'to_place_full', 'distance', 'duration_minutes', 'return_route', 'route_value'], 500);
-        const staffRes = await FrappeClient.getList('Staff', {}, ['name', 'vehicle_assigned']);
+        const staffRes = await FrappeClient.getList('Staff', {}, ['name', 'vehicle_assigned', 'email', 'driver']);
         const nextRoutes = routesRes.message || [];
         setRoutes(nextRoutes);
-        setStaff(staffRes.message || []);
+        const allStaff: Staff[] = staffRes.message || [];
+        const userEmail = user?.email?.toLowerCase().trim();
+        const filteredStaff = userEmail
+          ? allStaff.filter((s: any) => {
+              const staffEmail = String(s.email || '').toLowerCase().trim();
+              const staffName = String(s.name || '').toLowerCase().trim();
+              return staffEmail === userEmail || staffName === userEmail || staffName === user?.username?.toLowerCase().trim();
+            })
+          : allStaff;
+        const currentStaff = filteredStaff[0] as any;
+        setStaff(filteredStaff.length ? filteredStaff : allStaff);
 
         if (trip?.name && !formData.passengers?.length) {
             const fullTrip = await FrappeClient.getDoc('Trip', trip.name);
@@ -106,13 +117,19 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang }) => {
               const invoice = await FrappeClient.getTripInvoice(nextTrip.trip_invoice);
               setTripInvoice(invoice);
             }
+        } else if (!trip?.name && currentStaff) {
+            setFormData(prev => ({
+                ...prev,
+                driver: currentStaff.driver || currentStaff.name,
+                assigned_vehicle: currentStaff.vehicle_assigned || prev.assigned_vehicle,
+            }));
         }
       } catch (err) {
         console.error(err);
       }
     };
     fetchData();
-  }, [trip]);
+  }, [trip, user]);
 
   const showToast = (message: string, type: 'success' | 'error') => {
     setToast({ message, type });
