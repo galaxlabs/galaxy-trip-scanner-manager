@@ -270,11 +270,11 @@ export async function getDriverVatDashboard(
     ),
     getDashboardList(
       'Trip Invoice',
-      { status: 'Ready' },
+      {},
       [
         'name', 'creation', 'invoice_date', 'status', 'trip', 'company', 'customer',
         'invoice_passenger_name', 'trip_value', 'distance', 'vat_mode', 'vat_rate',
-        'net_total', 'vat_amount', 'grand_total',
+        'net_total', 'vat_amount', 'grand_total', 'invoice_scope', 'invoice_scope',
       ]
     ),
   ]);
