@@ -87,6 +87,27 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang, user })
   useEffect(() => {
     const fetchData = async () => {
       try {
+        // Auto-complete past trips and check for incomplete ones
+        try {
+          await FrappeClient.fetch('tms.api.trip_management.auto_complete_past_trips', {}, { method: 'POST' });
+        } catch {}
+        if (!trip?.name) {
+          try {
+            const incompleteRes = await FrappeClient.fetch('tms.api.trip_management.has_incomplete_past_trips', {}, { method: 'POST' });
+            const incompleteData = incompleteRes.message;
+            if (incompleteData?.has_incomplete) {
+              const names = incompleteData.trips.map((t: any) => t.name).join(', ');
+              setToast({ message: `Complete past trips first: ${names}`, type: 'error' });
+              setConfirmModal({
+                title: 'Incomplete Past Trips',
+                desc: `You have ${incompleteData.trips.length} past trip(s) that haven't been marked as Arrived. Please complete them before creating new trips: ${names}`,
+                action: () => { setConfirmModal(null); },
+              });
+              setLoading(false);
+              return;
+            }
+          } catch {}
+        }
         const routesRes = await FrappeClient.getMyList('Route', {}, ['name', 'from_place_full', 'to_place_full', 'distance', 'duration_minutes', 'return_route', 'route_value'], 500);
         const staffRes = await FrappeClient.getMyList('Staff', {}, ['name', 'vehicle_assigned', 'email', 'driver']);
         const nextRoutes = routesRes.message || [];
