@@ -50,6 +50,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang, user })
   const fileInputRef = useRef<HTMLInputElement>(null);
   const routePickerRef = useRef<HTMLDivElement>(null);
   const formDataRef = useRef<Trip>(formData);
+  const isSavingRef = useRef(false);
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
   const normalizeVatMode = (value?: string) => value === "Manual VAT" ? "Excluded" : (value || "Included");
   const getRouteLabel = (route: Route) =>
@@ -455,7 +456,13 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang, user })
   };
 
   const saveTrip = async () => {
-    await saveTripDocument(true);
+    if (loading || isSavingRef.current) return;
+    isSavingRef.current = true;
+    try {
+      await saveTripDocument(true);
+    } finally {
+      isSavingRef.current = false;
+    }
   };
 
   const autoSaveTripAfterScan = async () => {
@@ -700,7 +707,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang, user })
             </p>
         </div>
         <div className="flex items-center gap-1.5">
-            <button disabled={loading} onClick={saveTrip} className={`px-5 py-2.5 rounded-2xl font-black text-[10px] uppercase shadow-lg transition-all active:scale-95 ${isDirty ? 'bg-blue-600 text-white shadow-blue-200' : 'bg-slate-900 text-white shadow-slate-200'}`}>
+            <button disabled={loading || isSavingRef.current} onClick={saveTrip} className={`px-5 py-2.5 rounded-2xl font-black text-[10px] uppercase shadow-lg transition-all active:scale-95 ${isDirty ? 'bg-blue-600 text-white shadow-blue-200' : 'bg-slate-900 text-white shadow-slate-200'}`}>
                 {loading ? t.syncing : t.save}
             </button>
         </div>
