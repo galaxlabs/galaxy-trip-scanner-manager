@@ -25,7 +25,7 @@ const TripInvoiceList: React.FC<TripInvoiceListProps> = ({ lang }) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await FrappeClient.getList(
+      const res = await FrappeClient.getMyList(
         'Trip Invoice',
         { status: 'Ready' },
         ['name', 'creation', 'invoice_date', 'trip', 'status', 'grand_total', 'invoice_passenger_name'],

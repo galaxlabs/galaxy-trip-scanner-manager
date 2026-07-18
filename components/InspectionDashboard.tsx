@@ -23,7 +23,7 @@ const InspectionDashboard: React.FC<InspectionDashboardProps> = ({ onCreateNew, 
     setLoading(true);
     setError(null);
     try {
-      const res = await FrappeClient.getList('Vehicle Inspection Log', {}, [
+      const res = await FrappeClient.getMyList('Vehicle Inspection Log', {}, [
         'name',
         'creation',
         'inspection_date',

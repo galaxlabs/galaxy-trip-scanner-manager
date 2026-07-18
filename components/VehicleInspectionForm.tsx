@@ -38,8 +38,8 @@ const VehicleInspectionForm: React.FC<VehicleInspectionFormProps> = ({ inspectio
     const fetchData = async () => {
       try {
         const [staffRes, checklistRes] = await Promise.all([
-          FrappeClient.getList('Staff', { is_driver: 1 }, ['name', 'vehicle_assigned']),
-          FrappeClient.getList('Vehicle Inspection Checklist Item', { is_active: 1 }, ['name', 'item', 'category', 'sort_order']),
+          FrappeClient.getMyList('Staff', { is_driver: 1 }, ['name', 'vehicle_assigned']),
+          FrappeClient.getMyList('Vehicle Inspection Checklist Item', { is_active: 1 }, ['name', 'item', 'category', 'sort_order']),
         ]);
 
         setStaff(staffRes.message || []);

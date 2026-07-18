@@ -124,6 +124,22 @@ export class FrappeClient {
     localStorage.removeItem("frappe_user");
   }
 
+  static async getMyList(
+    doctype: string,
+    filters: any = {},
+    fields: string[] = ["name"],
+    limit_page_length: number = 50,
+    order_by: string = "creation desc"
+  ) {
+    return this.fetch("tms.api.auth.get_user_filtered_list", {
+      doctype,
+      filters: JSON.stringify(filters),
+      fields: JSON.stringify(fields),
+      limit_page_length,
+      order_by,
+    }, { method: "POST" });
+  }
+
   static async getList(
     doctype: string,
     filters: any = {},

@@ -86,8 +86,8 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang, user })
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const routesRes = await FrappeClient.getList('Route', {}, ['name', 'from_place_full', 'to_place_full', 'distance', 'duration_minutes', 'return_route', 'route_value'], 500);
-        const staffRes = await FrappeClient.getList('Staff', {}, ['name', 'vehicle_assigned', 'email', 'driver']);
+        const routesRes = await FrappeClient.getMyList('Route', {}, ['name', 'from_place_full', 'to_place_full', 'distance', 'duration_minutes', 'return_route', 'route_value'], 500);
+        const staffRes = await FrappeClient.getMyList('Staff', {}, ['name', 'vehicle_assigned', 'email', 'driver']);
         const nextRoutes = routesRes.message || [];
         setRoutes(nextRoutes);
         const allStaff: Staff[] = staffRes.message || [];

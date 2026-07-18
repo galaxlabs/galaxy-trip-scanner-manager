@@ -34,10 +34,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) 
     setError(null);
     try {
       const [tripsRes, routesRes] = await Promise.all([
-        FrappeClient.getList('Trip', {}, [
+        FrappeClient.getMyList('Trip', {}, [
           'name', 'creation', 'trip_status', 'from_location', 'to_location', 'departure', 'driver', 'assigned_vehicle', 'trip_route', 'distance', 'duration_minutes', 'trip_value', 'billing_mode', 'trip_invoice', 'trip_invoice_created'
         ], 100),
-        FrappeClient.getList('Route', {}, ['name', 'from_place_full', 'to_place_full', 'distance', 'duration_minutes', 'return_route', 'route_value'], 100)
+        FrappeClient.getMyList('Route', {}, ['name', 'from_place_full', 'to_place_full', 'distance', 'duration_minutes', 'return_route', 'route_value'], 100)
       ]);
       const nextTrips = tripsRes.message || [];
       setTrips(nextTrips);
@@ -45,7 +45,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onEditTrip, lang }) 
 
       const invoiceNames = nextTrips.map((trip: Trip) => trip.trip_invoice).filter(Boolean);
       if (invoiceNames.length) {
-        const invoicesRes = await FrappeClient.getList(
+        const invoicesRes = await FrappeClient.getMyList(
           'Trip Invoice',
           [['name', 'in', invoiceNames]],
           ['name', 'status', 'kashf_ready', 'grand_total'],
