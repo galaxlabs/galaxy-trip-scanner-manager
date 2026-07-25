@@ -40,7 +40,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, currentView, act
         <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={() => onNavigate('dashboard')}
-            className="w-11 h-11 rounded-2xl flex-shrink-0 flex items-center justify-center active:scale-95 transition-all overflow-hidden bg-white/20"
+            className="w-11 h-11 rounded-full flex-shrink-0 flex items-center justify-center active:scale-95 transition-all bg-white"
             aria-label={t.home}
           >
             <img src="/logo.png" alt="CE" className="w-7 h-7 object-contain" />
