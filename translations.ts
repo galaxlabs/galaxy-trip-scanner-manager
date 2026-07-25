@@ -119,8 +119,8 @@ export const translations: Record<Language, any> = {
     invalidCredentials: "Invalid username or password"
   },
   ar: {
-    appName: "جالاكسي TMS",
-    loginTitle: "بوابة جالاكسي",
+    appName: "سيليتك TMS",
+    loginTitle: "بوابة سيليتك",
     loginSubtitle: "سجل الدخول للوصول إلى لوحة التحكم",
     username: "اسم المستخدم",
     password: "كلمة المرور",
@@ -235,8 +235,8 @@ export const translations: Record<Language, any> = {
     invalidCredentials: "اسم المستخدم أو كلمة المرور غير صحيحة"
   },
   ur: {
-    appName: "گلیکسی TMS",
-    loginTitle: "گلیکسی پورٹل",
+    appName: "سیلٹیک TMS",
+    loginTitle: "سیلٹیک پورٹل",
     loginSubtitle: "اپنے ڈیش بورڈ تک رسائی کے لیے سائن ان کریں",
     username: "صارف نام",
     password: "پاس ورڈ",
