@@ -125,6 +125,10 @@ export class FrappeClient {
     return !!localStorage.getItem("frappe_user");
   }
 
+  static getApiCredentials(): { api_key: string; api_secret: string } | null {
+    return null;
+  }
+
   static async getMyList(
     doctype: string,
     filters: any = {},
