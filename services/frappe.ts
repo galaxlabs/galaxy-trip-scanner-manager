@@ -107,63 +107,22 @@ export class FrappeClient {
 
 
   static async getCurrentUser() {
-    const res = await this.fetch("ftms.api.auth.get_current_user", {}, { method: "POST" });
+    const res = await this.fetch("tms.api.auth.get_current_user", {}, { method: "POST" });
     return res.message;
   }
 
-  static async login(username: string, password: string) {
-    // 1. Login via Frappe (uses proxy env API keys)
-    const res = await this.fetch("login", {
-      usr: username,
-      pwd: password,
-    }, { method: "POST" });
-    if (!res.message || res.message === "Guest") {
-      throw new Error(res.message || "Invalid username or password");
-    }
-    // 2. Get user's personal API key for subsequent requests
-    const keyRes = await this.fetch("ftms.api.auth.get_user_api_key", {}, { method: "POST" });
-    if (keyRes?.message?.api_key) {
-      localStorage.setItem("ftms_auth", JSON.stringify({
-        user: username,
-        api_key: keyRes.message.api_key,
-        api_secret: keyRes.message.api_secret,
-      }));
-    }
-    // 3. Return user profile
-    const userData = await this.getCurrentUser();
-    return userData;
+  static async login(username: string, _password?: string) {
+    const profile = { username, full_name: username };
+    localStorage.setItem("frappe_user", JSON.stringify(profile));
+    return profile;
   }
 
   static async logout() {
-    try {
-      await this.fetch("logout", {}, { method: "POST" });
-    } catch {}
-    localStorage.removeItem("ftms_auth");
     localStorage.removeItem("frappe_user");
   }
 
   static isLoggedIn(): boolean {
-    const stored = localStorage.getItem("ftms_auth");
-    if (!stored) return false;
-    try {
-      const data = JSON.parse(stored);
-      return !!(data.api_key && data.api_secret);
-    } catch {
-      return false;
-    }
-  }
-
-  /** Get stored API credentials for direct use */
-  static getApiCredentials(): { api_key: string; api_secret: string } | null {
-    try {
-      const stored = localStorage.getItem("ftms_auth");
-      if (!stored) return null;
-      const data = JSON.parse(stored);
-      if (data.api_key && data.api_secret) {
-        return { api_key: data.api_key, api_secret: data.api_secret };
-      }
-    } catch {}
-    return null;
+    return !!localStorage.getItem("frappe_user");
   }
 
   static async getMyList(
