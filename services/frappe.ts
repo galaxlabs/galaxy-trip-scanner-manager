@@ -139,6 +139,7 @@ export class FrappeClient {
       await this.fetch("logout", {}, { method: "POST" });
     } catch {}
     localStorage.removeItem("ftms_auth");
+    localStorage.removeItem("frappe_user");
   }
 
   static isLoggedIn(): boolean {

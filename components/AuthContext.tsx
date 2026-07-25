@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { FrappeClient } from '../services/frappe';
 
 interface CompanyData {
   company_code?: string;
