@@ -51,8 +51,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, lang, onLangChange }) => {
         ))}
       </div>
 
-      <div className="w-24 h-24 rounded-full flex items-center justify-center shadow-2xl mb-8 bg-white">
-        <img src="/logo.png" alt="CELTECH Portal" className="w-16 h-16 object-contain" />
+      <div className="w-24 h-24 flex items-center justify-center mb-8">
+        <img src="/logo.png" alt="CELTECH Portal" className="w-full h-full object-contain drop-shadow-2xl" />
       </div>
       
       <div className="text-center mb-10">
