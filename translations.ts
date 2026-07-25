@@ -3,8 +3,8 @@ import { Language } from './types';
 
 export const translations: Record<Language, any> = {
   en: {
-    appName: "Galaxy TMS",
-    loginTitle: "Galaxy Portal",
+    appName: "CELTECH TMS",
+    loginTitle: "CELTECH Portal",
     loginSubtitle: "Sign in to access your dashboard",
     username: "Username",
     password: "Password",

@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { FrappeClient } from '../services/frappe';
 
 interface CompanyData {
   company_code?: string;
@@ -59,19 +58,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refresh = useCallback(async () => {
     try {
-      const data = await FrappeClient.getCurrentUser();
-      if (data?.is_authenticated) {
+      const stored = localStorage.getItem('frappe_user');
+      if (stored) {
+        const parsed = JSON.parse(stored);
         setUser({
-          user: data.user || data.name,
-          full_name: data.full_name || data.name,
-          email: data.email,
-          mobile_no: data.mobile_no,
-          portal_role: data.portal_role,
-          company: data.company,
-          company_data: data.company_data,
-          subscription: data.subscription,
-          permissions: data.permissions,
-          roles: data.roles || [],
+          user: parsed.username || parsed.name,
+          full_name: parsed.full_name || parsed.username,
+          email: parsed.email,
+          roles: parsed.roles || [],
         });
       } else {
         setUser(null);
@@ -84,7 +78,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (FrappeClient.isLoggedIn()) {
+    const stored = localStorage.getItem('frappe_user');
+    if (stored) {
       refresh();
     } else {
       setLoading(false);

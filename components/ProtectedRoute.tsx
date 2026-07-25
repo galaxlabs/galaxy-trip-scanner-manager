@@ -33,16 +33,5 @@ export default function ProtectedRoute({ children, requiredRole, requiredCompany
     );
   }
 
-  if (requiredCompany && !user?.company) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-6">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-[var(--ink)]">No Company</h2>
-          <p className="text-[var(--ink-soft)] mt-2">You are not linked to any company. Contact your administrator.</p>
-        </div>
-      </div>
-    );
-  }
-
   return <>{children}</>;
 }
