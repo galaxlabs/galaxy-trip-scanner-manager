@@ -40,10 +40,10 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, currentView, act
         <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={() => onNavigate('dashboard')}
-            className="w-11 h-11 bg-[var(--paper-soft)] text-[var(--ink)] rounded-2xl flex-shrink-0 flex items-center justify-center active:scale-95 transition-all"
+            className="w-11 h-11 rounded-2xl flex-shrink-0 flex items-center justify-center active:scale-95 transition-all overflow-hidden bg-white/20"
             aria-label={t.home}
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 12l9-8 9 8M5 10v10h14V10"/></svg>
+            <img src="/logo.png" alt="CE" className="w-7 h-7 object-contain" />
           </button>
           <div className="min-w-0 flex-1">
             <p className="text-[9px] font-black text-white/40 uppercase tracking-[0.22em] leading-none">{moduleMeta.eyebrow}</p>
@@ -65,7 +65,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, currentView, act
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-[9px] font-black text-[var(--cyan)] uppercase tracking-[0.2em]">{t.signedIn}</p>
-                <p className="text-sm font-black text-[var(--ink)] truncate max-w-[220px]">{user.full_name || user.username}</p>
+                <p className="text-sm font-black text-[var(--ink)] truncate max-w-[220px]">{user.full_name || user.user}</p>
               </div>
               <button onClick={() => setMenuOpen(false)} className="w-10 h-10 rounded-2xl surface-muted text-[var(--ink-soft)] flex items-center justify-center">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"/></svg>

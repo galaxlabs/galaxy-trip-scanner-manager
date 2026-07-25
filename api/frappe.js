@@ -1,34 +1,15 @@
-// api/frappe.js
-// Vercel Serverless Function proxy for Frappe
-// Works with Vite frontend calling /api/frappe?method=...
-
 export default async function handler(req, res) {
-  // Handle preflight
   if (req.method === "OPTIONS") {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-    res.setHeader(
-      "Access-Control-Allow-Headers",
-      "Content-Type, Authorization, X-Frappe-Authorization, X-Requested-With"
-    );
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Frappe-Authorization, X-Requested-With");
     return res.status(204).end();
   }
 
   try {
-    const BASE_URL = process.env.FRAPPE_BASE_URL || "https://tms.galaxylabs.online";
+    const BASE_URL = process.env.FRAPPE_BASE_URL || "https://ftms.galaxylabs.online";
     const API_KEY = process.env.FRAPPE_API_KEY;
     const API_SECRET = process.env.FRAPPE_API_SECRET;
-
-    if (!API_KEY || !API_SECRET) {
-      return res.status(500).json({
-        error: "Missing env vars on Vercel",
-        missing: {
-          FRAPPE_API_KEY: !API_KEY,
-          FRAPPE_API_SECRET: !API_SECRET,
-          FRAPPE_BASE_URL: !process.env.FRAPPE_BASE_URL,
-        },
-      });
-    }
 
     const { method, ...query } = req.query || {};
     if (!method) {
@@ -36,37 +17,51 @@ export default async function handler(req, res) {
     }
 
     const url = new URL(`${BASE_URL}/api/method/${method}`);
-
-    // Forward query params (except method)
     Object.entries(query).forEach(([k, v]) => {
       if (v === undefined || v === null) return;
       if (Array.isArray(v)) url.searchParams.set(k, String(v[0]));
       else url.searchParams.set(k, String(v));
     });
 
-    const token = `token ${API_KEY}:${API_SECRET}`;
-
-    const headers = {
-      Accept: "application/json",
-      Authorization: token,
-      "X-Frappe-Authorization": token,
-      "X-Requested-With": "XMLHttpRequest",
-    };
+    // Parse body if present
+    let body;
+    let reqApiKey = API_KEY;
+    let reqApiSecret = API_SECRET;
 
     const methodUpper = (req.method || "GET").toUpperCase();
-
-    let body;
     if (methodUpper !== "GET" && methodUpper !== "HEAD") {
-      // Vercel may give object body; ensure JSON string
       if (req.body !== undefined && req.body !== null && req.body !== "") {
         body = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
+
+        // Extract per-user API credentials from request body
+        try {
+          const parsed = JSON.parse(body);
+          if (parsed._api_key && parsed._api_secret) {
+            reqApiKey = parsed._api_key;
+            reqApiSecret = parsed._api_secret;
+            // Remove from body sent to Frappe
+            delete parsed._api_key;
+            delete parsed._api_secret;
+            body = JSON.stringify(parsed);
+          }
+        } catch {}
       } else {
         body = "{}";
       }
-      headers["Content-Type"] = req.headers["content-type"] || "application/json";
     }
 
-    // ✅ If fetch is missing, this will throw and you'll see debug
+    const headers = {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "X-Requested-With": "XMLHttpRequest",
+    };
+
+    if (reqApiKey && reqApiSecret) {
+      const token = `token ${reqApiKey}:${reqApiSecret}`;
+      headers["Authorization"] = token;
+      headers["X-Frappe-Authorization"] = token;
+    }
+
     const frappeRes = await fetch(url.toString(), {
       method: methodUpper,
       headers,
@@ -77,21 +72,14 @@ export default async function handler(req, res) {
 
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-    res.setHeader(
-      "Access-Control-Allow-Headers",
-      "Content-Type, Authorization, X-Frappe-Authorization, X-Requested-With"
-    );
-
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Frappe-Authorization, X-Requested-With");
     res.status(frappeRes.status);
     res.setHeader("Content-Type", frappeRes.headers.get("content-type") || "application/json");
     return res.send(text);
   } catch (e) {
-    // ✅ return real error so you can see in browser
     return res.status(500).json({
       error: "Proxy crashed",
       details: String(e?.message || e),
-      hint:
-        "If details says 'fetch is not defined', set Vercel Node runtime to 18+ or use undici.",
     });
   }
 }

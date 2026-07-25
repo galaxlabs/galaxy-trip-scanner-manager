@@ -1,11 +1,11 @@
 
 import React, { useState } from 'react';
 import { FrappeClient } from '../services/frappe';
-import { User, Language } from '../types';
+import { Language } from '../types';
 import { translations } from '../translations';
 
 interface LoginProps {
-  onLogin: (user: User) => void;
+  onLogin: (userData: any) => void;
   lang: Language;
   onLangChange: (lang: Language) => void;
 }
@@ -51,9 +51,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, lang, onLangChange }) => {
         ))}
       </div>
 
-      <div className="w-24 h-24 app-header rounded-[2.5rem] flex items-center justify-center text-[var(--paper-soft)] text-5xl font-black shadow-2xl mb-8 relative rotate-3">
-        G
-        <div className="absolute -top-2 -right-2 w-6 h-6 bg-[var(--amber)] rounded-full border-4 border-[var(--paper-soft)] animate-pulse"></div>
+      <div className="w-24 h-24 rounded-[2.5rem] flex items-center justify-center shadow-2xl mb-8 relative overflow-hidden bg-white">
+        <img src="/logo.png" alt="CELTECH Portal" className="w-full h-full object-contain p-1" />
       </div>
       
       <div className="text-center mb-10">

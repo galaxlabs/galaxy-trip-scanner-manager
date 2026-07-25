@@ -122,9 +122,33 @@ export interface Staff {
 }
 
 export interface User {
-  username: string;
+  user: string;
+  name?: string;
   full_name: string;
   email?: string;
+  mobile_no?: string;
+  portal_role?: string;
+  company?: string;
+  company_data?: {
+    company_code?: string;
+    company_name?: string;
+    legal_name?: string;
+    vat_no?: string;
+    enable_kashf?: boolean;
+    status?: string;
+  };
+  subscription?: {
+    status: string;
+    trial_days_left: number;
+    active_days_left: number;
+  };
+  permissions?: {
+    company?: string;
+    can_create?: boolean;
+    can_edit?: boolean;
+    can_delete?: boolean;
+  };
+  roles: string[];
 }
 
 export interface VehicleInspectionChecklistItem {
