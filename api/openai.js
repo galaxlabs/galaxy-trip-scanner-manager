@@ -33,6 +33,23 @@ Rules:
 - Do NOT extract company names, document types, expiry dates, contact numbers, visa types, or any other fields.
 - Respond with valid JSON only. No markdown, no code fences.`;
 
+function isPdfMime(mimeType) {
+  return String(mimeType || "").toLowerCase() === "application/pdf";
+}
+
+function buildPdfInput(base64Data) {
+  return [
+    {
+      role: "user",
+      content: [
+        { type: "input_text", text: SYSTEM_PROMPT },
+        { type: "input_text", text: "Extract passenger details from this PDF. Return JSON with key 'passengers' containing an array of objects with exactly: name, passport, nationality. No other fields, no trip object." },
+        { type: "input_file", filename: "passenger-document.pdf", file_data: `data:application/pdf;base64,${extractDataPart(base64Data)}` },
+      ],
+    },
+  ];
+}
+
 function buildPassengerMessages(base64Data, mimeType) {
   return [
     { role: "system", content: SYSTEM_PROMPT },
@@ -108,18 +125,28 @@ export default async function handler(req, res) {
     }
 
     const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
-
-    const messages =
-      normalizedTask === "passengers"
-        ? buildPassengerMessages(base64Data, mimeType || "image/jpeg")
-        : normalizedTask === "trip"
-          ? buildTripMessages(base64Data, mimeType || "image/jpeg")
-          : buildAutoMessages(base64Data, mimeType || "image/jpeg");
-
     const client = getClient();
-    const response = await client.chat.completions.create({ model, messages, max_tokens: 4096 });
 
-    const rawText = (response.choices?.[0]?.message?.content || "").trim();
+    let rawText = "";
+
+    if (isPdfMime(mimeType)) {
+      const response = await client.responses.create({
+        model,
+        input: buildPdfInput(base64Data),
+        max_output_tokens: 4096,
+      });
+      rawText = (response.output_text || "").trim();
+    } else {
+      const messages =
+        normalizedTask === "passengers"
+          ? buildPassengerMessages(base64Data, mimeType || "image/jpeg")
+          : normalizedTask === "trip"
+            ? buildTripMessages(base64Data, mimeType || "image/jpeg")
+            : buildAutoMessages(base64Data, mimeType || "image/jpeg");
+
+      const response = await client.chat.completions.create({ model, messages, max_tokens: 4096 });
+      rawText = (response.choices?.[0]?.message?.content || "").trim();
+    }
 
     const fallbackValue =
       normalizedTask === "passengers" || normalizedTask === "auto" ? [] : [];
