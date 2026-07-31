@@ -123,6 +123,7 @@ export interface Staff {
 
 export interface User {
   user: string;
+  username?: string;
   name?: string;
   full_name: string;
   email?: string;

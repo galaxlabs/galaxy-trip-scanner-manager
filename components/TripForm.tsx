@@ -113,12 +113,13 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onBack, onSave, lang, user })
         const nextRoutes = routesRes.message || [];
         setRoutes(nextRoutes);
         const allStaff: Staff[] = staffRes.message || [];
-        const userEmail = user?.email?.toLowerCase().trim();
-        const currentStaff = userEmail
+        const userIdentity = String(user?.email || user?.username || user?.user || user?.name || '').toLowerCase().trim();
+        const currentStaff = userIdentity && userIdentity !== 'administrator'
           ? allStaff.find((s: any) => {
               const staffEmail = String(s.email || '').toLowerCase().trim();
               const staffName = String(s.name || '').toLowerCase().trim();
-              return staffEmail === userEmail || staffName === userEmail || staffName === user?.username?.toLowerCase().trim();
+              const driverName = String(s.driver || '').toLowerCase().trim();
+              return staffEmail === userIdentity || staffName === userIdentity || driverName === userIdentity;
             })
           : undefined;
         setStaff(allStaff);

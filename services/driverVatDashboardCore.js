@@ -18,7 +18,7 @@ export function buildStaffLabel(staff) {
 }
 
 export function findCurrentStaff(staffRows, user) {
-  const identity = normalize(user?.username);
+  const identity = normalize(user?.email || user?.username || user?.user || user?.name);
   if (!identity || identity === "administrator") return undefined;
 
   return staffRows.find((staff) => {

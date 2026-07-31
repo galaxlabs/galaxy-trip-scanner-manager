@@ -24,6 +24,8 @@ interface Permissions {
 
 interface User {
   user: string;
+  username?: string;
+  name?: string;
   full_name: string;
   email?: string;
   mobile_no?: string;
@@ -64,6 +66,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const parsed = JSON.parse(stored);
         setUser({
           user: parsed.username || parsed.name,
+          username: parsed.username || parsed.name,
+          name: parsed.name || parsed.username,
           full_name: parsed.full_name || parsed.username,
           email: parsed.email,
           roles: parsed.roles || [],
@@ -89,7 +93,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async (username: string, password: string) => {
     const userData = await FrappeClient.login(username, password);
-    setUser(userData);
+    setUser({
+      user: userData.username || userData.name,
+      username: userData.username || userData.name,
+      name: userData.name || userData.username,
+      full_name: userData.full_name || userData.username,
+      email: userData.email,
+      roles: userData.roles || [],
+    });
   }, []);
 
   const logout = useCallback(async () => {
