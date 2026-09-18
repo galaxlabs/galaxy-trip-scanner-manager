@@ -19,6 +19,11 @@ export default async function handler(req, res) {
     const publicMethods = new Set([
       "tms.api.auth.portal_login",
     ]);
+    const blockedAccountAllowedMethods = new Set([
+      "tms.api.auth.validate_portal_session",
+      "tms.api.subscription.get_payment_status",
+      "tms.api.subscription.upload_payment_receipt",
+    ]);
 
     const headers = {
       Accept: "application/json",
@@ -73,10 +78,21 @@ export default async function handler(req, res) {
       }
 
       verifiedSession = validatePayload.message;
+      const payment = verifiedSession.subscription?.payment;
+      if (payment?.blocked && !blockedAccountAllowedMethods.has(method)) {
+        return res.status(402).json({
+          error: "Account suspended",
+          payment,
+        });
+      }
       if (parsedBody && typeof parsedBody === "object") {
         delete parsedBody._api_key;
         delete parsedBody._api_secret;
-        if (method !== "tms.api.auth.get_user_filtered_list" && !method.startsWith("tms.api.trip_management.")) {
+        if (
+          method !== "tms.api.auth.get_user_filtered_list" &&
+          !method.startsWith("tms.api.trip_management.") &&
+          !method.startsWith("tms.api.subscription.")
+        ) {
           delete parsedBody.portal_token;
         }
         if (method === "tms.api.auth.get_user_filtered_list" || method.startsWith("tms.api.trip_management.")) {

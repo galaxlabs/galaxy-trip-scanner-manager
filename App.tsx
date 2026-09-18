@@ -12,6 +12,8 @@ import ExpenseCaptureDemo from './components/ExpenseCaptureDemo';
 import DriverVatDashboard from './components/DriverVatDashboard';
 import ProtectedRoute from './components/ProtectedRoute';
 import { Layout } from './components/Layout';
+import PaymentStatusGate from './components/PaymentStatusGate';
+import { FrappeClient } from './services/frappe';
 
 type ActiveModule = 'trip' | 'trip_invoice' | 'inspection' | 'driver_vat' | 'expense_demo' | 'feedback';
 type CurrentView = 'dashboard' | 'create' | 'edit';
@@ -44,6 +46,7 @@ function AppContent() {
   const [selectedTrip, setSelectedTrip] = useState<Partial<Trip> | null>(null);
   const [selectedInspection, setSelectedInspection] = useState<Partial<VehicleInspectionLog> | null>(null);
   const [lang, setLang] = useState<Language>('en');
+  const [paymentStatus, setPaymentStatus] = useState<any>(null);
 
   useEffect(() => {
     const savedLang = localStorage.getItem('app_lang') as Language;
@@ -59,6 +62,23 @@ function AppContent() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  useEffect(() => {
+    if (!user) {
+      setPaymentStatus(null);
+      return;
+    }
+
+    let cancelled = false;
+    FrappeClient.getPaymentStatus()
+      .then((status) => {
+        if (!cancelled) setPaymentStatus(status);
+      })
+      .catch((err) => {
+        console.error('Payment status failed', err);
+      });
+    return () => { cancelled = true; };
+  }, [user]);
+
   const syncPath = (module: ActiveModule) => {
     const nextPath = moduleToPath(module);
     if (window.location.pathname !== nextPath) {
@@ -71,6 +91,7 @@ function AppContent() {
   };
 
   const handleLogout = () => {
+    setPaymentStatus(null);
     logout();
   };
 
@@ -160,6 +181,11 @@ function AppContent() {
       activeModule={activeModule}
     >
       <ProtectedRoute requiredCompany>
+        {paymentStatus?.blocked ? (
+          <PaymentStatusGate status={paymentStatus} onStatusChange={setPaymentStatus} blockedOnly />
+        ) : (
+          <>
+            <PaymentStatusGate status={paymentStatus} onStatusChange={setPaymentStatus} />
         {activeModule === 'trip' && currentView === 'dashboard' && (
           <Dashboard
             lang={lang}
@@ -205,6 +231,8 @@ function AppContent() {
         {activeModule === 'driver_vat' && <DriverVatDashboard lang={lang} user={user} />}
         {activeModule === 'expense_demo' && <ExpenseCaptureDemo lang={lang} />}
         {activeModule === 'feedback' && <FeedbackPage lang={lang} />}
+          </>
+        )}
       </ProtectedRoute>
     </Layout>
   );

@@ -300,6 +300,26 @@ export class FrappeClient {
     return res.message;
   }
 
+  static async getPaymentStatus() {
+    const res = await this.fetch("tms.api.subscription.get_payment_status", {}, { method: "POST" });
+    return res.message;
+  }
+
+  static async uploadPaymentReceipt(file: File, receiptNote: string = "") {
+    const base64Data = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("File read failed"));
+      reader.readAsDataURL(file);
+    });
+    const res = await this.fetch("tms.api.subscription.upload_payment_receipt", {
+      file_name: file.name,
+      file_data: base64Data,
+      receipt_note: receiptNote,
+    }, { method: "POST" });
+    return res.message;
+  }
+
   static getPrintUrl(doctype: string, name: string, format?: string) {
     const fmt = format || doctype;
     const url = new URL("/api/print", window.location.origin);
