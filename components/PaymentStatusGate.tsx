@@ -10,6 +10,9 @@ interface PaymentStatus {
   message?: string;
   amount_due?: number;
   amount_paid?: number;
+  monthly_credits?: number;
+  credits_used?: number;
+  credit_balance?: number;
   currency?: string;
   due_date?: string;
   grace_until?: string;
@@ -56,6 +59,14 @@ export default function PaymentStatusGate({ status, onStatusChange, blockedOnly 
         <h2 className="text-lg font-black leading-tight">{status.message}</h2>
         <div className="grid grid-cols-2 gap-2 text-[11px] font-bold">
           <div className="rounded-2xl bg-white/70 p-3">
+            <p className="opacity-60 uppercase text-[9px] font-black">Wallet Credits</p>
+            <p>{Number(status.credit_balance ?? 0)} / {Number(status.monthly_credits ?? 30)}</p>
+          </div>
+          <div className="rounded-2xl bg-white/70 p-3">
+            <p className="opacity-60 uppercase text-[9px] font-black">Days Used</p>
+            <p>{Number(status.credits_used ?? 0)} credits</p>
+          </div>
+          <div className="rounded-2xl bg-white/70 p-3">
             <p className="opacity-60 uppercase text-[9px] font-black">Pending Dues</p>
             <p>{status.currency || 'SAR'} {Number(status.amount_due || 0).toFixed(2)}</p>
           </div>
@@ -87,7 +98,7 @@ export default function PaymentStatusGate({ status, onStatusChange, blockedOnly 
           disabled={uploading}
           className="w-full rounded-2xl bg-slate-950 px-4 py-4 text-xs font-black uppercase tracking-widest text-white disabled:opacity-60"
         >
-          {uploading ? 'Uploading Receipt...' : 'Upload Payment Receipt'}
+          {uploading ? 'Uploading Receipt...' : 'Add Payment / Upload Receipt'}
         </button>
         {status.receipt && <p className="text-[10px] font-bold opacity-70">Receipt uploaded. Waiting for admin approval.</p>}
         {error && <p className="text-[10px] font-bold text-red-700">{error}</p>}
