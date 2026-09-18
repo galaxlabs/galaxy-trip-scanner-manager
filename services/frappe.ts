@@ -305,6 +305,11 @@ export class FrappeClient {
     return res.message;
   }
 
+  static async subscribeCurrentMonth() {
+    const res = await this.fetch("tms.api.subscription.subscribe_current_month", {}, { method: "POST" });
+    return res.message;
+  }
+
   static async uploadPaymentReceipt(file: File, receiptNote: string = "") {
     const base64Data = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();

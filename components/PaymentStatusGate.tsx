@@ -13,7 +13,13 @@ interface PaymentStatus {
   monthly_credits?: number;
   credits_used?: number;
   credit_balance?: number;
+  balance_status?: string;
   currency?: string;
+  issue_date?: string;
+  last_date?: string;
+  disable_after?: string;
+  days_remaining?: number;
+  timezone?: string;
   due_date?: string;
   grace_until?: string;
   receipt?: string;
@@ -29,10 +35,11 @@ export default function PaymentStatusGate({ status, onStatusChange, blockedOnly 
   const fileRef = useRef<HTMLInputElement>(null);
   const [note, setNote] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [subscribing, setSubscribing] = useState(false);
   const [error, setError] = useState('');
 
   if (!status?.configured) return null;
-  if (!status.blocked && !status.warning && !blockedOnly && status.status !== 'Pending' && status.status !== 'Rejected') return null;
+  if (!status.blocked && !status.warning && !blockedOnly && status.status !== 'Pending' && status.status !== 'Rejected' && status.balance_status !== 'Low') return null;
 
   const upload = async (file?: File) => {
     if (!file) return;
@@ -49,14 +56,36 @@ export default function PaymentStatusGate({ status, onStatusChange, blockedOnly 
     }
   };
 
+  const subscribe = async () => {
+    setSubscribing(true);
+    setError('');
+    try {
+      const nextStatus = await FrappeClient.subscribeCurrentMonth();
+      onStatusChange(nextStatus);
+    } catch (err: any) {
+      setError(String(err?.message || err));
+    } finally {
+      setSubscribing(false);
+    }
+  };
+
   const tone = status.blocked ? 'bg-red-50 border-red-100 text-red-800' : 'bg-amber-50 border-amber-100 text-amber-900';
   const title = status.blocked ? 'Account Suspended' : 'Payment Reminder';
+  const balanceStatus = status.balance_status || (Number(status.credit_balance || 0) <= 0 ? 'Ended' : Number(status.credit_balance || 0) <= 5 ? 'Low' : 'Active');
 
   return (
     <section className={`m-4 rounded-[2rem] border p-5 shadow-sm ${tone}`}>
       <div className="space-y-2">
         <p className="text-[10px] font-black uppercase tracking-[0.22em] opacity-70">{title}</p>
         <h2 className="text-lg font-black leading-tight">{status.message}</h2>
+        <div className="rounded-3xl bg-white/75 p-4 text-xs font-bold">
+          <div className="flex items-center justify-between gap-3">
+            <span className="opacity-60 uppercase text-[9px] font-black tracking-widest">Balance Status</span>
+            <span className="rounded-full bg-slate-950 px-3 py-1 text-[10px] font-black uppercase text-white">{balanceStatus}</span>
+          </div>
+          <p className="mt-2 text-sm font-black">{Number(status.credit_balance ?? 0)} days balance remaining</p>
+          <p className="mt-1 opacity-70">Account disables after {status.disable_after || status.last_date || '-'} Saudi time.</p>
+        </div>
         <div className="grid grid-cols-2 gap-2 text-[11px] font-bold">
           <div className="rounded-2xl bg-white/70 p-3">
             <p className="opacity-60 uppercase text-[9px] font-black">Wallet Credits</p>
@@ -71,13 +100,29 @@ export default function PaymentStatusGate({ status, onStatusChange, blockedOnly 
             <p>{status.currency || 'SAR'} {Number(status.amount_due || 0).toFixed(2)}</p>
           </div>
           <div className="rounded-2xl bg-white/70 p-3">
-            <p className="opacity-60 uppercase text-[9px] font-black">Pay Before</p>
-            <p>{status.grace_until || status.due_date || '-'}</p>
+            <p className="opacity-60 uppercase text-[9px] font-black">Issue Date</p>
+            <p>{status.issue_date || status.due_date || '-'}</p>
+          </div>
+          <div className="rounded-2xl bg-white/70 p-3">
+            <p className="opacity-60 uppercase text-[9px] font-black">Last Date</p>
+            <p>{status.last_date || status.grace_until || '-'}</p>
+          </div>
+          <div className="rounded-2xl bg-white/70 p-3">
+            <p className="opacity-60 uppercase text-[9px] font-black">Saudi Time Zone</p>
+            <p>{status.timezone || 'Asia/Riyadh'}</p>
           </div>
         </div>
       </div>
 
       <div className="mt-4 space-y-3">
+        <button
+          type="button"
+          onClick={subscribe}
+          disabled={subscribing}
+          className="w-full rounded-2xl bg-emerald-700 px-4 py-4 text-xs font-black uppercase tracking-widest text-white disabled:opacity-60"
+        >
+          {subscribing ? 'Loading Balance...' : 'Subscribe / Load Balance'}
+        </button>
         <textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}

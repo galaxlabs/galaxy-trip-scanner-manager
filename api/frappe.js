@@ -22,6 +22,7 @@ export default async function handler(req, res) {
     const blockedAccountAllowedMethods = new Set([
       "tms.api.auth.validate_portal_session",
       "tms.api.subscription.get_payment_status",
+      "tms.api.subscription.subscribe_current_month",
       "tms.api.subscription.upload_payment_receipt",
     ]);
 
