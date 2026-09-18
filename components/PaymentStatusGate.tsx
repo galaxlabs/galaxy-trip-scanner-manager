@@ -3,6 +3,7 @@ import { FrappeClient } from '../services/frappe';
 
 interface PaymentStatus {
   configured?: boolean;
+  has_subscription?: boolean;
   allowed?: boolean;
   blocked?: boolean;
   warning?: boolean;
@@ -23,6 +24,8 @@ interface PaymentStatus {
   due_date?: string;
   grace_until?: string;
   receipt?: string;
+  subscription_plan?: string;
+  plan_options?: Array<{ plan: 'monthly' | 'yearly' | 'more'; label: string; amount?: number | null; credits: number }>;
 }
 
 interface PaymentStatusGateProps {
@@ -36,10 +39,10 @@ export default function PaymentStatusGate({ status, onStatusChange, blockedOnly 
   const [note, setNote] = useState('');
   const [uploading, setUploading] = useState(false);
   const [subscribing, setSubscribing] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly' | 'more'>('monthly');
   const [error, setError] = useState('');
 
-  if (!status?.configured) return null;
-  if (!status.blocked && !status.warning && !blockedOnly && status.status !== 'Pending' && status.status !== 'Rejected' && status.balance_status !== 'Low') return null;
+  if (!status) return null;
 
   const upload = async (file?: File) => {
     if (!file) return;
@@ -56,11 +59,12 @@ export default function PaymentStatusGate({ status, onStatusChange, blockedOnly 
     }
   };
 
-  const subscribe = async () => {
+  const subscribe = async (plan: 'monthly' | 'yearly' | 'more') => {
+    setSelectedPlan(plan);
     setSubscribing(true);
     setError('');
     try {
-      const nextStatus = await FrappeClient.subscribeCurrentMonth();
+      const nextStatus = await FrappeClient.subscribeCurrentMonth(plan);
       onStatusChange(nextStatus);
     } catch (err: any) {
       setError(String(err?.message || err));
@@ -70,8 +74,13 @@ export default function PaymentStatusGate({ status, onStatusChange, blockedOnly 
   };
 
   const tone = status.blocked ? 'bg-red-50 border-red-100 text-red-800' : 'bg-amber-50 border-amber-100 text-amber-900';
-  const title = status.blocked ? 'Account Suspended' : 'Payment Reminder';
+  const title = status.blocked ? 'Account Suspended' : status.has_subscription ? 'Subscription Wallet' : 'Load Balance';
   const balanceStatus = status.balance_status || (Number(status.credit_balance || 0) <= 0 ? 'Ended' : Number(status.credit_balance || 0) <= 5 ? 'Low' : 'Active');
+  const planOptions = status.plan_options?.length ? status.plan_options : [
+    { plan: 'monthly' as const, label: 'Monthly', amount: null, credits: 30 },
+    { plan: 'yearly' as const, label: 'Yearly', amount: null, credits: 365 },
+    { plan: 'more' as const, label: 'More Credits', amount: null, credits: 30 },
+  ];
 
   return (
     <section className={`m-4 rounded-[2rem] border p-5 shadow-sm ${tone}`}>
@@ -83,7 +92,8 @@ export default function PaymentStatusGate({ status, onStatusChange, blockedOnly 
             <span className="opacity-60 uppercase text-[9px] font-black tracking-widest">Balance Status</span>
             <span className="rounded-full bg-slate-950 px-3 py-1 text-[10px] font-black uppercase text-white">{balanceStatus}</span>
           </div>
-          <p className="mt-2 text-sm font-black">{Number(status.credit_balance ?? 0)} days balance remaining</p>
+          <p className="mt-2 text-sm font-black">{Number(status.credit_balance ?? 0)} credits balance remaining</p>
+          <p className="mt-1 opacity-70">Current plan: {status.subscription_plan || 'Not subscribed'}</p>
           <p className="mt-1 opacity-70">Account disables after {status.disable_after || status.last_date || '-'} Saudi time.</p>
         </div>
         <div className="grid grid-cols-2 gap-2 text-[11px] font-bold">
@@ -92,7 +102,7 @@ export default function PaymentStatusGate({ status, onStatusChange, blockedOnly 
             <p>{Number(status.credit_balance ?? 0)} / {Number(status.monthly_credits ?? 30)}</p>
           </div>
           <div className="rounded-2xl bg-white/70 p-3">
-            <p className="opacity-60 uppercase text-[9px] font-black">Days Used</p>
+            <p className="opacity-60 uppercase text-[9px] font-black">Current Credit Used</p>
             <p>{Number(status.credits_used ?? 0)} credits</p>
           </div>
           <div className="rounded-2xl bg-white/70 p-3">
@@ -115,14 +125,21 @@ export default function PaymentStatusGate({ status, onStatusChange, blockedOnly 
       </div>
 
       <div className="mt-4 space-y-3">
-        <button
-          type="button"
-          onClick={subscribe}
-          disabled={subscribing}
-          className="w-full rounded-2xl bg-emerald-700 px-4 py-4 text-xs font-black uppercase tracking-widest text-white disabled:opacity-60"
-        >
-          {subscribing ? 'Loading Balance...' : 'Subscribe / Load Balance'}
-        </button>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {planOptions.map((option) => (
+            <button
+              key={option.plan}
+              type="button"
+              onClick={() => subscribe(option.plan)}
+              disabled={subscribing}
+              className="rounded-2xl bg-emerald-700 px-3 py-4 text-left text-white disabled:opacity-60"
+            >
+              <span className="block text-xs font-black uppercase tracking-widest">{subscribing && selectedPlan === option.plan ? 'Loading...' : option.label}</span>
+              <span className="mt-1 block text-[11px] font-bold opacity-90">{option.credits} credits</span>
+              <span className="mt-1 block text-[11px] font-black">{option.amount == null ? 'Amount not set' : `${status.currency || 'SAR'} ${Number(option.amount).toFixed(2)}`}</span>
+            </button>
+          ))}
+        </div>
         <textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}
