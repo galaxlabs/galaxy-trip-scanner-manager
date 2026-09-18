@@ -99,6 +99,9 @@ export default async function handler(req, res) {
         if (method === "tms.api.auth.get_user_filtered_list" || method.startsWith("tms.api.trip_management.")) {
           parsedBody.current_user_email = verifiedSession.user;
         }
+        if (method.startsWith("tms.api.subscription.")) {
+          parsedBody.portal_token = portalToken;
+        }
         body = JSON.stringify(parsedBody);
       }
       delete query.portal_token;
