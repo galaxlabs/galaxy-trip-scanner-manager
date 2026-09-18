@@ -25,7 +25,9 @@ interface PaymentStatus {
   grace_until?: string;
   receipt?: string;
   subscription_plan?: string;
-  plan_options?: Array<{ plan: 'monthly' | 'yearly' | 'more'; label: string; amount?: number | null; credits: number }>;
+  company?: string;
+  company_vehicle_count?: number;
+  plan_options?: Array<{ plan: 'monthly' | 'yearly' | 'more'; label: string; amount?: number | null; credits: number; bulk_eligible?: boolean; bulk_min_vehicles?: number; monthly_rate?: number | null; vehicle_count?: number }>;
 }
 
 interface PaymentStatusGateProps {
@@ -94,6 +96,7 @@ export default function PaymentStatusGate({ status, onStatusChange, blockedOnly 
           </div>
           <p className="mt-2 text-sm font-black">{Number(status.credit_balance ?? 0)} credits balance remaining</p>
           <p className="mt-1 opacity-70">Current plan: {status.subscription_plan || 'Not subscribed'}</p>
+          <p className="mt-1 opacity-70">Company: {status.company || '-'} · Vehicles: {Number(status.company_vehicle_count || 0)}</p>
           <p className="mt-1 opacity-70">Account disables after {status.disable_after || status.last_date || '-'} Saudi time.</p>
         </div>
         <div className="grid grid-cols-2 gap-2 text-[11px] font-bold">
@@ -136,6 +139,11 @@ export default function PaymentStatusGate({ status, onStatusChange, blockedOnly 
             >
               <span className="block text-xs font-black uppercase tracking-widest">{subscribing && selectedPlan === option.plan ? 'Loading...' : option.label}</span>
               <span className="mt-1 block text-[11px] font-bold opacity-90">{option.credits} credits</span>
+              {option.plan === 'yearly' && (
+                <span className="mt-1 block text-[10px] font-bold opacity-80">
+                  {option.bulk_eligible ? `${status.currency || 'SAR'} ${Number(option.monthly_rate || 0).toFixed(2)}/month bulk` : `Bulk starts at ${option.bulk_min_vehicles || 50}+ vehicles`}
+                </span>
+              )}
               <span className="mt-1 block text-[11px] font-black">{option.amount == null ? 'Amount not set' : `${status.currency || 'SAR'} ${Number(option.amount).toFixed(2)}`}</span>
             </button>
           ))}
