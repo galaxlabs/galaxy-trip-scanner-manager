@@ -40,8 +40,6 @@ export default function PaymentStatusGate({ status, onStatusChange, blockedOnly 
   const fileRef = useRef<HTMLInputElement>(null);
   const [note, setNote] = useState('');
   const [uploading, setUploading] = useState(false);
-  const [subscribing, setSubscribing] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<'monthly'>('monthly');
   const [error, setError] = useState('');
 
   if (!status) return null;
@@ -58,20 +56,6 @@ export default function PaymentStatusGate({ status, onStatusChange, blockedOnly 
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = '';
-    }
-  };
-
-  const subscribe = async (plan: 'monthly') => {
-    setSelectedPlan(plan);
-    setSubscribing(true);
-    setError('');
-    try {
-      const nextStatus = await FrappeClient.subscribeCurrentMonth(plan);
-      onStatusChange(nextStatus);
-    } catch (err: any) {
-      setError(String(err?.message || err));
-    } finally {
-      setSubscribing(false);
     }
   };
 
@@ -122,16 +106,11 @@ export default function PaymentStatusGate({ status, onStatusChange, blockedOnly 
       </div>
 
       <div className="mt-4 space-y-3">
-        <button
-          type="button"
-          onClick={() => subscribe('monthly')}
-          disabled={subscribing}
-          className="w-full rounded-2xl bg-emerald-700 px-4 py-4 text-left text-white disabled:opacity-60"
-        >
-          <span className="block text-xs font-black uppercase tracking-widest">{subscribing && selectedPlan === 'monthly' ? 'Loading...' : monthlyPlan.label}</span>
+        <div className="w-full rounded-2xl bg-emerald-700 px-4 py-4 text-left text-white">
+          <span className="block text-xs font-black uppercase tracking-widest">{monthlyPlan.label}</span>
           <span className="mt-1 block text-[11px] font-bold opacity-90">{monthlyPlan.credits} credits</span>
-          <span className="mt-1 block text-[11px] font-black">{monthlyPlan.amount == null ? 'Amount not set' : `${status.currency || 'SAR'} ${Number(monthlyPlan.amount).toFixed(2)}`}</span>
-        </button>
+          <span className="mt-1 block text-[11px] font-black">Pricing as per agreement</span>
+        </div>
         <textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}
