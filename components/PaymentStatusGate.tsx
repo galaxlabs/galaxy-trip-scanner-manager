@@ -89,11 +89,8 @@ export default function PaymentStatusGate({ status, onStatusChange, blockedOnly 
         <div className="rounded-3xl bg-white/75 p-4 text-xs font-bold">
           <div className="flex items-center justify-between gap-3">
             <span className="opacity-60 uppercase text-[9px] font-black tracking-widest">Balance Status</span>
-            <span className="rounded-full bg-slate-950 px-3 py-1 text-[10px] font-black uppercase text-white">{balanceStatus}</span>
+            <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase text-white ${isActive ? 'bg-emerald-700' : 'bg-red-700'}`}>{balanceStatus}</span>
           </div>
-          <p className="mt-2 text-sm font-black">{Number(status.credit_balance ?? 0)} credits balance remaining</p>
-          <p className="mt-1 opacity-70">Current plan: {status.subscription_plan || 'Not subscribed'}</p>
-          <p className="mt-1 opacity-70">Company: {status.company || '-'} · Vehicles: {Number(status.company_vehicle_count || 0)}</p>
           <p className="mt-1 opacity-70">Account disables after {status.disable_after || status.last_date || '-'} Saudi time.</p>
         </div>
         <div className="grid grid-cols-2 gap-2 text-[11px] font-bold">
