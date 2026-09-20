@@ -305,7 +305,7 @@ export class FrappeClient {
     return res.message;
   }
 
-  static async subscribeCurrentMonth(plan: "monthly" | "yearly" | "more" = "monthly") {
+  static async subscribeCurrentMonth(plan: "monthly" = "monthly") {
     const res = await this.fetch("tms.api.subscription.subscribe_current_month", { plan }, { method: "POST" });
     return res.message;
   }

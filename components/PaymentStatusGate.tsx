@@ -41,7 +41,7 @@ export default function PaymentStatusGate({ status, onStatusChange, blockedOnly 
   const [note, setNote] = useState('');
   const [uploading, setUploading] = useState(false);
   const [subscribing, setSubscribing] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly' | 'more'>('monthly');
+  const [selectedPlan, setSelectedPlan] = useState<'monthly'>('monthly');
   const [error, setError] = useState('');
 
   if (!status) return null;
@@ -61,7 +61,7 @@ export default function PaymentStatusGate({ status, onStatusChange, blockedOnly 
     }
   };
 
-  const subscribe = async (plan: 'monthly' | 'yearly' | 'more') => {
+  const subscribe = async (plan: 'monthly') => {
     setSelectedPlan(plan);
     setSubscribing(true);
     setError('');
@@ -75,14 +75,11 @@ export default function PaymentStatusGate({ status, onStatusChange, blockedOnly 
     }
   };
 
-  const tone = status.blocked ? 'bg-red-50 border-red-100 text-red-800' : 'bg-amber-50 border-amber-100 text-amber-900';
-  const title = status.blocked ? 'Account Suspended' : status.has_subscription ? 'Subscription Wallet' : 'Load Balance';
   const balanceStatus = status.balance_status || (Number(status.credit_balance || 0) <= 0 ? 'Ended' : Number(status.credit_balance || 0) <= 5 ? 'Low' : 'Active');
-  const planOptions = status.plan_options?.length ? status.plan_options : [
-    { plan: 'monthly' as const, label: 'Monthly', amount: null, credits: 30 },
-    { plan: 'yearly' as const, label: 'Yearly', amount: null, credits: 365 },
-    { plan: 'more' as const, label: 'More Credits', amount: null, credits: 30 },
-  ];
+  const isActive = !status.blocked && balanceStatus !== 'Ended' && balanceStatus !== 'No Plan';
+  const tone = isActive ? 'bg-emerald-50 border-emerald-100 text-emerald-900' : 'bg-red-50 border-red-100 text-red-800';
+  const title = status.blocked ? 'Account Suspended' : status.has_subscription ? 'Subscription Wallet' : 'Load Balance';
+  const monthlyPlan = status.plan_options?.find((option) => option.plan === 'monthly') || { plan: 'monthly' as const, label: 'Monthly', amount: null, credits: 30 };
 
   return (
     <section className={`m-4 rounded-[2rem] border p-5 shadow-sm ${tone}`}>
@@ -128,26 +125,16 @@ export default function PaymentStatusGate({ status, onStatusChange, blockedOnly 
       </div>
 
       <div className="mt-4 space-y-3">
-        <div className="grid gap-2 sm:grid-cols-3">
-          {planOptions.map((option) => (
-            <button
-              key={option.plan}
-              type="button"
-              onClick={() => subscribe(option.plan)}
-              disabled={subscribing}
-              className="rounded-2xl bg-emerald-700 px-3 py-4 text-left text-white disabled:opacity-60"
-            >
-              <span className="block text-xs font-black uppercase tracking-widest">{subscribing && selectedPlan === option.plan ? 'Loading...' : option.label}</span>
-              <span className="mt-1 block text-[11px] font-bold opacity-90">{option.credits} credits</span>
-              {option.plan === 'yearly' && (
-                <span className="mt-1 block text-[10px] font-bold opacity-80">
-                  {option.bulk_eligible ? `${status.currency || 'SAR'} ${Number(option.monthly_rate || 0).toFixed(2)}/month bulk` : `Bulk starts at ${option.bulk_min_vehicles || 50}+ vehicles`}
-                </span>
-              )}
-              <span className="mt-1 block text-[11px] font-black">{option.amount == null ? 'Amount not set' : `${status.currency || 'SAR'} ${Number(option.amount).toFixed(2)}`}</span>
-            </button>
-          ))}
-        </div>
+        <button
+          type="button"
+          onClick={() => subscribe('monthly')}
+          disabled={subscribing}
+          className="w-full rounded-2xl bg-emerald-700 px-4 py-4 text-left text-white disabled:opacity-60"
+        >
+          <span className="block text-xs font-black uppercase tracking-widest">{subscribing && selectedPlan === 'monthly' ? 'Loading...' : monthlyPlan.label}</span>
+          <span className="mt-1 block text-[11px] font-bold opacity-90">{monthlyPlan.credits} credits</span>
+          <span className="mt-1 block text-[11px] font-black">{monthlyPlan.amount == null ? 'Amount not set' : `${status.currency || 'SAR'} ${Number(monthlyPlan.amount).toFixed(2)}`}</span>
+        </button>
         <textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}
